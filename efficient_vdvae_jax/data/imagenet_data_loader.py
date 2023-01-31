@@ -21,13 +21,15 @@ def load_and_shard_tf_batch(xs, global_batch_size):
     local_device_count = jax.local_device_count()
 
     def _prepare(x):
-        return x.reshape((local_device_count, global_batch_size // local_device_count) + x.shape[1:])
+        return x.reshape(
+            (local_device_count, global_batch_size // local_device_count) + x.shape[1:]
+        )
 
     return jax.tree_map(_prepare, xs)
 
 
 def create_synthesis_imagenet_dataset():
-    if hparams.synthesis.synthesis_mode == 'reconstruction':
+    if hparams.synthesis.synthesis_mode == "reconstruction":
         test_images = read_imagenet_images(hparams.data.synthesis_data_path)
 
         test_data = tf.data.Dataset.from_tensor_slices(test_images)
@@ -36,20 +38,21 @@ def create_synthesis_imagenet_dataset():
             lambda x: data_prep(x, False),
             cycle_length=tf.data.AUTOTUNE,
             num_parallel_calls=tf.data.AUTOTUNE,
-            deterministic=False)
-
-        test_data = test_data.batch(
-            hparams.synthesis.batch_size,
-            drop_remainder=True
+            deterministic=False,
         )
+
+        test_data = test_data.batch(hparams.synthesis.batch_size, drop_remainder=True)
         test_data = test_data.prefetch(tf.data.AUTOTUNE)
 
         test_data = tfds.as_numpy(test_data)
-        test_data = map(lambda x: load_and_shard_tf_batch(x, hparams.synthesis.batch_size), test_data)
+        test_data = map(
+            lambda x: load_and_shard_tf_batch(x, hparams.synthesis.batch_size),
+            test_data,
+        )
         test_data = jax_utils.prefetch_to_device(test_data, 10)
         return test_data
 
-    elif hparams.synthesis.synthesis_mode == 'div_stats':
+    elif hparams.synthesis.synthesis_mode == "div_stats":
         train_data = read_imagenet_images(hparams.data.train_data_path)
 
         n_train_samples = train_data.shape[0]
@@ -58,27 +61,30 @@ def create_synthesis_imagenet_dataset():
 
         # Take a subset of the data
         train_data = train_data.shuffle(n_train_samples)
-        train_data = train_data.take(int(hparams.synthesis.div_stats_subset_ratio * n_train_samples))
+        train_data = train_data.take(
+            int(hparams.synthesis.div_stats_subset_ratio * n_train_samples)
+        )
 
         # Preprocess subset and prefect to device
         train_data = train_data.interleave(
             lambda x: data_prep(x, False),
             cycle_length=tf.data.AUTOTUNE,
             num_parallel_calls=tf.data.AUTOTUNE,
-            deterministic=False)
-
-        train_data = train_data.batch(
-            hparams.synthesis.batch_size,
-            drop_remainder=True
+            deterministic=False,
         )
+
+        train_data = train_data.batch(hparams.synthesis.batch_size, drop_remainder=True)
         train_data = train_data.prefetch(tf.data.AUTOTUNE)
 
         train_data = tfds.as_numpy(train_data)
-        train_data = map(lambda x: load_and_shard_tf_batch(x, hparams.synthesis.batch_size), train_data)
+        train_data = map(
+            lambda x: load_and_shard_tf_batch(x, hparams.synthesis.batch_size),
+            train_data,
+        )
         train_data = jax_utils.prefetch_to_device(train_data, 10)
         return train_data
 
-    elif hparams.synthesis.synthesis_mode == 'encoding':
+    elif hparams.synthesis.synthesis_mode == "encoding":
         train_data = read_imagenet_images(hparams.data.train_data_path)
         train_filenames = make_toy_filenames(train_data)
 
@@ -88,18 +94,21 @@ def create_synthesis_imagenet_dataset():
             named_data_prep,
             cycle_length=tf.data.AUTOTUNE,
             num_parallel_calls=tf.data.AUTOTUNE,
-            deterministic=False
+            deterministic=False,
         )
 
-        train_data = train_data.batch(
-            hparams.synthesis.batch_size,
-            drop_remainder=True
-        )
+        train_data = train_data.batch(hparams.synthesis.batch_size, drop_remainder=True)
 
         train_data = train_data.prefetch(tf.data.AUTOTUNE)
 
         train_data = tfds.as_numpy(train_data)
-        train_data = map(lambda x: (load_and_shard_tf_batch(x[0], hparams.synthesis.batch_size), x[1]), train_data)
+        train_data = map(
+            lambda x: (
+                load_and_shard_tf_batch(x[0], hparams.synthesis.batch_size),
+                x[1],
+            ),
+            train_data,
+        )
         return train_data
 
     else:
@@ -123,19 +132,30 @@ def data_prep(img, flip, return_targets=True):
 
     if return_targets:
         # [1, H, W, C]
-        return tf.data.Dataset.from_tensor_slices(tensors=(inputs[tf.newaxis, ...], targets[tf.newaxis, ...]))
+        return tf.data.Dataset.from_tensor_slices(
+            tensors=(inputs[tf.newaxis, ...], targets[tf.newaxis, ...])
+        )
     else:
         return inputs[tf.newaxis, ...]
 
 
 def make_toy_filenames(data):
-    return [f'image_{i}' for i in range(data.shape[0])]
+    return [f"image_{i}" for i in range(data.shape[0])]
 
 
 def read_imagenet_images(path):
     files = [os.path.join(path, f) for f in sorted(os.listdir(path))]
-    data = np.concatenate([np.load(f)['data'] for f in files], axis=0)  # [samples, C * H * W]
-    data = data.reshape([data.shape[0], hparams.data.channels, hparams.data.target_res, hparams.data.target_res])  # [samples, C, H, W]
+    data = np.concatenate(
+        [np.load(f)["data"] for f in files], axis=0
+    )  # [samples, C * H * W]
+    data = data.reshape(
+        [
+            data.shape[0],
+            hparams.data.channels,
+            hparams.data.target_res,
+            hparams.data.target_res,
+        ]
+    )  # [samples, C, H, W]
     data = data.transpose([0, 2, 3, 1])  # [samples, H, W, C]
 
     assert data.shape[1] == data.shape[2] == hparams.data.target_res
@@ -167,35 +187,33 @@ def create_imagenet_datasets():
         lambda x: data_prep(x, True),
         cycle_length=tf.data.AUTOTUNE,
         num_parallel_calls=tf.data.AUTOTUNE,
-        deterministic=False
+        deterministic=False,
     )
 
     val_data = val_data.interleave(
         lambda x: data_prep(x, False),
         cycle_length=tf.data.AUTOTUNE,
         num_parallel_calls=tf.data.AUTOTUNE,
-        deterministic=False
+        deterministic=False,
     )
 
     # cache, Batch, prefetch
-    train_data = train_data.batch(
-        hparams.train.batch_size,
-        drop_remainder=True
-    )
+    train_data = train_data.batch(hparams.train.batch_size, drop_remainder=True)
     train_data = train_data.prefetch(tf.data.AUTOTUNE)
 
-    val_data = val_data.batch(
-        hparams.val.batch_size,
-        drop_remainder=True
-    )
+    val_data = val_data.batch(hparams.val.batch_size, drop_remainder=True)
     val_data = val_data.prefetch(tf.data.AUTOTUNE)
 
     train_data = tfds.as_numpy(train_data)
     val_data = tfds.as_numpy(val_data)
 
-    train_data = map(lambda x: load_and_shard_tf_batch(x, hparams.train.batch_size), train_data)
+    train_data = map(
+        lambda x: load_and_shard_tf_batch(x, hparams.train.batch_size), train_data
+    )
     train_data = jax_utils.prefetch_to_device(train_data, 5)
 
-    val_data = map(lambda x: load_and_shard_tf_batch(x, hparams.val.batch_size), val_data)
+    val_data = map(
+        lambda x: load_and_shard_tf_batch(x, hparams.val.batch_size), val_data
+    )
     val_data = jax_utils.prefetch_to_device(val_data, 1)
     return train_data, val_data

@@ -49,22 +49,27 @@ class KLDivergenceStats(KLDivergence):
     """
 
     def avg_loss_compute(self, p, q, global_batch_size):
-        if hparams.model.distribution_base == 'std':
+        if hparams.model.distribution_base == "std":
             loss = calculate_std_loss(p, q)
-        elif hparams.model.distribution_base == 'logstd':
+        elif hparams.model.distribution_base == "logstd":
             loss = calculate_logstd_loss(p, q)
         else:
-            raise ValueError(f'distribution base {hparams.model.distribution_base} not known!!')
+            raise ValueError(
+                f"distribution base {hparams.model.distribution_base} not known!!"
+            )
 
         mean_axis = list(range(2, len(loss.size())))
         per_example_loss = torch.sum(loss, dim=mean_axis)
-        n_mean_elems = np.prod([loss.size()[a] for a in mean_axis])  # heads * h * w  or h * w
+        n_mean_elems = np.prod(
+            [loss.size()[a] for a in mean_axis]
+        )  # heads * h * w  or h * w
         avg_per_example_loss = per_example_loss / n_mean_elems
         assert len(per_example_loss.shape) == 2
 
         # [n_variates,]
         avg_loss = torch.sum(avg_per_example_loss, dim=0) / (
-                global_batch_size * np.log(2))  # divide by ln(2) to convert to KL rate (average space bits/dim)
+            global_batch_size * np.log(2)
+        )  # divide by ln(2) to convert to KL rate (average space bits/dim)
 
         return avg_loss
 
@@ -72,7 +77,9 @@ class KLDivergenceStats(KLDivergence):
         kls = []
 
         for p, q in zip(p_dist, q_dist):
-            kl_loss = self.avg_loss_compute(p=p, q=q, global_batch_size=global_batch_size)
+            kl_loss = self.avg_loss_compute(
+                p=p, q=q, global_batch_size=global_batch_size
+            )
             kls.append(kl_loss)
 
         return torch.stack(kls, dim=0)  # n_layers, n_variates

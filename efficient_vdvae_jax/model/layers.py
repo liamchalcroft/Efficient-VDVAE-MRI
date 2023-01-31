@@ -28,14 +28,20 @@ class UnpoolLayer(nn.Module):
     @nn.compact
     def __call__(self, x):
         B, H, W, _ = x.shape
-        x = Conv2D(filters=self.filters, kernel_size=1, strides=1, padding='SAME', name='conv')(x)
+        x = Conv2D(
+            filters=self.filters, kernel_size=1, strides=1, padding="SAME", name="conv"
+        )(x)
         x = nn.leaky_relu(x, negative_slope=0.1)
 
-        x = jax.image.resize(x, shape=[B, H * self.strides, W * self.strides, x.shape[-1]], method='nearest')
+        x = jax.image.resize(
+            x,
+            shape=[B, H * self.strides, W * self.strides, x.shape[-1]],
+            method="nearest",
+        )
 
-        scale_bias_param = self.param('scale_bias',
-                                      zeros,
-                                      (1, H * self.strides, W * self.strides, x.shape[-1]))
+        scale_bias_param = self.param(
+            "scale_bias", zeros, (1, H * self.strides, W * self.strides, x.shape[-1])
+        )
         x = x + jnp.asarray(scale_bias_param, dtype=x.dtype)
 
         return x
@@ -47,7 +53,13 @@ class PoolLayer(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        x = Conv2D(filters=self.filters, kernel_size=self.strides, strides=self.strides, padding='SAME', name='conv')(x)
+        x = Conv2D(
+            filters=self.filters,
+            kernel_size=self.strides,
+            strides=self.strides,
+            padding="SAME",
+            name="conv",
+        )(x)
         x = nn.leaky_relu(x, negative_slope=0.1)
 
         return x
@@ -55,10 +67,10 @@ class PoolLayer(nn.Module):
 
 class ProjectionWrapper(nn.Module):
     """Wrapper on top of Conv2D for when the filter_size is not available in the setup stage.
-     Maps an input 'x' to the shape 'filters' using a 1x1 conv.
-     Both 'x' and 'filters' are provided during the call and not during the initialization of the layer.
+    Maps an input 'x' to the shape 'filters' using a 1x1 conv.
+    Both 'x' and 'filters' are provided during the call and not during the initialization of the layer.
 
-     Mainly used to overcome the limitation of flax.linen to provide the inputs' shapes during the setup stage."""
+    Mainly used to overcome the limitation of flax.linen to provide the inputs' shapes during the setup stage."""
 
     @nn.compact
     def __call__(self, x, filters):
@@ -66,15 +78,24 @@ class ProjectionWrapper(nn.Module):
             filters=filters,
             kernel_size=1,
             strides=1,
-            padding='SAME',
-            kernel_init=stable_init(scale=np.sqrt(1. / float(sum(hparams.model.down_n_blocks_per_res) + len(hparams.model.down_strides)))),
-            name=self.name
+            padding="SAME",
+            kernel_init=stable_init(
+                scale=np.sqrt(
+                    1.0
+                    / float(
+                        sum(hparams.model.down_n_blocks_per_res)
+                        + len(hparams.model.down_strides)
+                    )
+                )
+            ),
+            name=self.name,
         )(x)
 
 
 class ResidualConvCell(nn.Module):
     """Optionally residual conv cell, the output is always input_filters * output_ratio.
     If residual=True then output_ratio must be equal to 1."""
+
     n_layers: int
     bottleneck_ratio: int
     kernel_size: int
@@ -95,10 +116,18 @@ class ResidualConvCell(nn.Module):
 
         for i in range(self.n_layers + 2):
             x = nn.swish(x)
-            x = Conv2D(filters=filters if i == self.n_layers + 1 else bottleneck_filters,
-                       kernel_size=1 if (i == 0 or i == self.n_layers + 1) and hparams.model.use_1x1_conv else self.kernel_size,
-                       strides=1, padding='SAME',
-                       kernel_init=stable_init(scale=self.init_scaler) if i == self.n_layers + 1 else glorot_uniform(), name=f'conv_{i}')(x)
+            x = Conv2D(
+                filters=filters if i == self.n_layers + 1 else bottleneck_filters,
+                kernel_size=1
+                if (i == 0 or i == self.n_layers + 1) and hparams.model.use_1x1_conv
+                else self.kernel_size,
+                strides=1,
+                padding="SAME",
+                kernel_init=stable_init(scale=self.init_scaler)
+                if i == self.n_layers + 1
+                else glorot_uniform(),
+                name=f"conv_{i}",
+            )(x)
 
         if self.residual:
             outputs = inputs + x
@@ -122,21 +151,37 @@ class LevelBlockUp(nn.Module):
         # Pre-skip block
         dropout_rng = random.split(key, num=self.n_blocks)
         for i in range(self.n_blocks):
-            x = ResidualConvCell(n_layers=self.n_layers,
-                                 bottleneck_ratio=self.bottleneck_ratio,
-                                 kernel_size=self.kernel_size,
-                                 init_scaler=np.sqrt(1. / float(sum(hparams.model.down_n_blocks_per_res) + len(hparams.model.down_strides))) if hparams.model.stable_init else 1.,
-                                 name=f'residual_block_{i}')(dropout_rng[i], x, training)
+            x = ResidualConvCell(
+                n_layers=self.n_layers,
+                bottleneck_ratio=self.bottleneck_ratio,
+                kernel_size=self.kernel_size,
+                init_scaler=np.sqrt(
+                    1.0
+                    / float(
+                        sum(hparams.model.down_n_blocks_per_res)
+                        + len(hparams.model.down_strides)
+                    )
+                )
+                if hparams.model.stable_init
+                else 1.0,
+                name=f"residual_block_{i}",
+            )(dropout_rng[i], x, training)
 
         # Skip connection from bottom-up used to compute z
         if use_skip:
-            skip_output = Conv2D(filters=self.skip_filters, kernel_size=1, strides=1, padding='SAME', name='skip_projection')(x)
+            skip_output = Conv2D(
+                filters=self.skip_filters,
+                kernel_size=1,
+                strides=1,
+                padding="SAME",
+                name="skip_projection",
+            )(x)
         else:
             skip_output = x
 
         # In downsample last, this block is the last block of the bigger resolution
         if self.strides > 1:
-            x = PoolLayer(self.filters, self.strides, name='pooling_layer')(x)
+            x = PoolLayer(self.filters, self.strides, name="pooling_layer")(x)
 
         return x, skip_output
 
@@ -152,49 +197,60 @@ class LevelBlockDown(nn.Module):
 
     def setup(self):
         if self.strides > 1:
-            self.unpool_layer = UnpoolLayer(filters=self.filters, strides=self.strides, name='unpooling_layer')
+            self.unpool_layer = UnpoolLayer(
+                filters=self.filters, strides=self.strides, name="unpooling_layer"
+            )
 
         residual_block = []
         for i in range(self.n_blocks):
-            residual_block.append(ResidualConvCell(
-                n_layers=self.n_layers,
-                bottleneck_ratio=self.bottleneck_ratio,
-                kernel_size=self.kernel_size,
-                init_scaler=np.sqrt(1. / float(sum(hparams.model.down_n_blocks_per_res) + len(hparams.model.down_strides))) if hparams.model.stable_init else 1.,
-                name=f'residual_block_{i}'
-            ))
+            residual_block.append(
+                ResidualConvCell(
+                    n_layers=self.n_layers,
+                    bottleneck_ratio=self.bottleneck_ratio,
+                    kernel_size=self.kernel_size,
+                    init_scaler=np.sqrt(
+                        1.0
+                        / float(
+                            sum(hparams.model.down_n_blocks_per_res)
+                            + len(hparams.model.down_strides)
+                        )
+                    )
+                    if hparams.model.stable_init
+                    else 1.0,
+                    name=f"residual_block_{i}",
+                )
+            )
 
         self.residual_block = residual_block
 
         self.posterior_net = ResidualConvCell(
             n_layers=self.n_layers,
-            bottleneck_ratio=self.bottleneck_ratio * 0.5,  # the input is 2* filters (concat of skip_x and y)
+            bottleneck_ratio=self.bottleneck_ratio
+            * 0.5,  # the input is 2* filters (concat of skip_x and y)
             kernel_size=self.kernel_size,
-            init_scaler=1.,
+            init_scaler=1.0,
             residual=False,
             output_ratio=0.5,  # the input is 2* filters
-            name='posterior_net'
+            name="posterior_net",
         )
         self.prior_net = ResidualConvCell(
             n_layers=self.n_layers,
             bottleneck_ratio=self.bottleneck_ratio,
             kernel_size=self.kernel_size,
-            init_scaler=0. if hparams.model.initialize_prior_weights_as_zero else 1.,
+            init_scaler=0.0 if hparams.model.initialize_prior_weights_as_zero else 1.0,
             residual=False,
             output_ratio=2,
-            name='prior_net'
+            name="prior_net",
         )
 
         self.prior_layer = GaussianLatentLayer(
-            num_variates=self.latent_variates,
-            name='prior_gaussian_layer'
+            num_variates=self.latent_variates, name="prior_gaussian_layer"
         )
         self.posterior_layer = GaussianLatentLayer(
-            num_variates=self.latent_variates,
-            name='posterior_gaussian_layer'
+            num_variates=self.latent_variates, name="posterior_gaussian_layer"
         )
 
-        self.z_projection = ProjectionWrapper(name='z_projection')
+        self.z_projection = ProjectionWrapper(name="z_projection")
 
     def sampler(self, latent_fn, key, y, prior_stats=None, temperature=None):
         z, dist = latent_fn(key, y, prior_stats=prior_stats, temperature=temperature)
@@ -209,8 +265,12 @@ class LevelBlockDown(nn.Module):
         if self.strides > 1:
             y = self.unpool_layer(y)
 
-        key, pr_dropout_key, po_dropout_key, *re_dropout_key = random.split(key, num=3 + len(self.residual_block))
-        kl_residual, y_prior_kl = jnp.split(self.prior_net(pr_dropout_key, y, training), indices_or_sections=2, axis=-1)
+        key, pr_dropout_key, po_dropout_key, *re_dropout_key = random.split(
+            key, num=3 + len(self.residual_block)
+        )
+        kl_residual, y_prior_kl = jnp.split(
+            self.prior_net(pr_dropout_key, y, training), indices_or_sections=2, axis=-1
+        )
 
         y_post = jnp.concatenate([y, x_skip], axis=-1)
         y_post = self.posterior_net(po_dropout_key, y_post, training)
@@ -220,18 +280,26 @@ class LevelBlockDown(nn.Module):
             # Sample z from the prior distribution
             z_prior_kl, prior_kl_dist = self.sampler(self.prior_layer, key, y_prior_kl)
         else:
-            prior_kl_dist = self.get_analytical_distribution(self.prior_layer, key, y_prior_kl)
+            prior_kl_dist = self.get_analytical_distribution(
+                self.prior_layer, key, y_prior_kl
+            )
 
         # Sample posterior under expected value of q(z<i|x)
-        z_post, posterior_dist = self.sampler(self.posterior_layer, key, y_post,
-                                              prior_stats=prior_kl_dist if hparams.model.use_residual_distribution else None)
+        z_post, posterior_dist = self.sampler(
+            self.posterior_layer,
+            key,
+            y_post,
+            prior_stats=prior_kl_dist
+            if hparams.model.use_residual_distribution
+            else None,
+        )
 
         if variate_mask is not None:
             # Only used in inference mode to prune turned-off variates
             # Use posterior sample from meaningful variates, and prior sample from "turned-off" variates
             # The NLL should be similar to using z_post without masking if the mask is good (not very destructive)
             # variate_mask automatically broadcasts to [batch_size, H, W, n_variates]
-            z_post = variate_mask * z_post + (1. - variate_mask) * z_prior_kl
+            z_post = variate_mask * z_post + (1.0 - variate_mask) * z_prior_kl
 
         # Residual with prior
         y = y + kl_residual
@@ -251,9 +319,13 @@ class LevelBlockDown(nn.Module):
         if self.strides > 1:
             y = self.unpool_layer(y)
 
-        key, pr_dropout_key, *re_dropout_key = random.split(key, num=2 + len(self.residual_block))
+        key, pr_dropout_key, *re_dropout_key = random.split(
+            key, num=2 + len(self.residual_block)
+        )
 
-        kl_residual, y_prior = jnp.split(self.prior_net(pr_dropout_key, y, training), indices_or_sections=2, axis=-1)
+        kl_residual, y_prior = jnp.split(
+            self.prior_net(pr_dropout_key, y, training), indices_or_sections=2, axis=-1
+        )
         z, _ = self.sampler(self.prior_layer, key, y_prior, temperature=temperature)
 
         y = y + kl_residual

@@ -17,8 +17,10 @@ except (ImportError, ValueError):
 hparams = HParams.get_hparams_by_name("efficient_vdvae")
 
 
-def get_optimizer(type, learning_rate, beta_1, beta_2, epsilon, use_weight_decay, l2_weight, l2_mask):
-    if type == 'Radam':
+def get_optimizer(
+    type, learning_rate, beta_1, beta_2, epsilon, use_weight_decay, l2_weight, l2_mask
+):
+    if type == "Radam":
         opt = Radam(
             learning_rate=learning_rate,
             b1=beta_1,
@@ -26,10 +28,10 @@ def get_optimizer(type, learning_rate, beta_1, beta_2, epsilon, use_weight_decay
             eps=epsilon,
             use_weight_decay=use_weight_decay,
             l2_weight=l2_weight,
-            l2_mask=l2_mask
+            l2_mask=l2_mask,
         ).make()
 
-    elif type == 'Adam':
+    elif type == "Adam":
         opt = Adam(
             learning_rate=learning_rate,
             b1=beta_1,
@@ -37,10 +39,10 @@ def get_optimizer(type, learning_rate, beta_1, beta_2, epsilon, use_weight_decay
             eps=epsilon,
             use_weight_decay=use_weight_decay,
             l2_weight=l2_weight,
-            l2_mask=l2_mask
+            l2_mask=l2_mask,
         ).make()
 
-    elif type == 'Adamax':
+    elif type == "Adamax":
         opt = Adamax(
             learning_rate=learning_rate,
             b1=beta_1,
@@ -48,11 +50,11 @@ def get_optimizer(type, learning_rate, beta_1, beta_2, epsilon, use_weight_decay
             eps=epsilon,
             use_weight_decay=use_weight_decay,
             l2_weight=l2_weight,
-            l2_mask=l2_mask
+            l2_mask=l2_mask,
         ).make()
 
     else:
-        raise ValueError(f'Optimizer {type} not known!!')
+        raise ValueError(f"Optimizer {type} not known!!")
 
     return opt
 
@@ -66,54 +68,78 @@ class BaseWeightDecayOptimizer:
 
     def _add_weight_decay_and_lr_transformations(self, transforms):
         if self.use_weight_decay:
-            assert self.l2_weight != 0.
-            transforms.append(transform.add_decayed_weights(weight_decay=self.l2_weight, mask=self.l2_mask))
+            assert self.l2_weight != 0.0
+            transforms.append(
+                transform.add_decayed_weights(
+                    weight_decay=self.l2_weight, mask=self.l2_mask
+                )
+            )
 
         transforms.append(_scale_by_learning_rate(self.learning_rate))
         return transforms
 
     def create_transforms(self):
         """Method that returns a list of optax transformations to apply during optimization"""
-        raise NotImplementedError('Do not use BaseWeightDecayOptimizer, create your own optimizer on top!')
+        raise NotImplementedError(
+            "Do not use BaseWeightDecayOptimizer, create your own optimizer on top!"
+        )
 
     def make(self):
         return combine.chain(*self.create_transforms())
 
 
 class Adam(BaseWeightDecayOptimizer):
-    def __init__(self, learning_rate: ScalarOrSchedule,
-                 b1: float = 0.9,
-                 b2: float = 0.999,
-                 eps: float = 1e-8,
-                 eps_root: float = 0.,
-                 use_weight_decay: bool = False,
-                 l2_weight: float = 0.,
-                 l2_mask: Optional[Union[Any, Callable[[Params], Any]]] = None):
+    def __init__(
+        self,
+        learning_rate: ScalarOrSchedule,
+        b1: float = 0.9,
+        b2: float = 0.999,
+        eps: float = 1e-8,
+        eps_root: float = 0.0,
+        use_weight_decay: bool = False,
+        l2_weight: float = 0.0,
+        l2_mask: Optional[Union[Any, Callable[[Params], Any]]] = None,
+    ):
         self.b1 = b1
         self.b2 = b2
         self.eps = eps
         self.eps_root = eps_root
-        super(Adam, self).__init__(learning_rate=learning_rate, use_weight_decay=use_weight_decay, l2_weight=l2_weight,
-                                   l2_mask=l2_mask)
+        super(Adam, self).__init__(
+            learning_rate=learning_rate,
+            use_weight_decay=use_weight_decay,
+            l2_weight=l2_weight,
+            l2_mask=l2_mask,
+        )
 
     def create_transforms(self):
-        transforms = [transform.scale_by_adam(b1=self.b1, b2=self.b2, eps=self.eps, eps_root=self.eps_root)]
+        transforms = [
+            transform.scale_by_adam(
+                b1=self.b1, b2=self.b2, eps=self.eps, eps_root=self.eps_root
+            )
+        ]
         return self._add_weight_decay_and_lr_transformations(transforms)
 
 
 class Adamax(BaseWeightDecayOptimizer):
-    def __init__(self, learning_rate: ScalarOrSchedule,
-                 b1: float = 0.9,
-                 b2: float = 0.999,
-                 eps: float = 1e-8,
-                 use_weight_decay: bool = False,
-                 l2_weight: float = 0.,
-                 l2_mask: Optional[Union[Any, Callable[[Params], Any]]] = None):
+    def __init__(
+        self,
+        learning_rate: ScalarOrSchedule,
+        b1: float = 0.9,
+        b2: float = 0.999,
+        eps: float = 1e-8,
+        use_weight_decay: bool = False,
+        l2_weight: float = 0.0,
+        l2_mask: Optional[Union[Any, Callable[[Params], Any]]] = None,
+    ):
         self.b1 = b1
         self.b2 = b2
         self.eps = eps
-        super(Adamax, self).__init__(learning_rate=learning_rate, use_weight_decay=use_weight_decay, l2_weight=l2_weight,
-                                     l2_mask=l2_mask)
+        super(Adamax, self).__init__(
+            learning_rate=learning_rate,
+            use_weight_decay=use_weight_decay,
+            l2_weight=l2_weight,
+            l2_mask=l2_mask,
+        )
 
     def create_transforms(self):
         transforms = [scale_by_adamax(b1=self.b1, b2=self.b2, eps=self.eps)]
@@ -121,43 +147,72 @@ class Adamax(BaseWeightDecayOptimizer):
 
 
 class Radam(BaseWeightDecayOptimizer):
-    def __init__(self, learning_rate: ScalarOrSchedule,
-                 b1: float = 0.9,
-                 b2: float = 0.999,
-                 eps: float = 1e-8,
-                 eps_root: float = 0.,
-                 threshold: float = 5.0,
-                 use_weight_decay: bool = False,
-                 l2_weight: float = 0.,
-                 l2_mask: Optional[Union[Any, Callable[[Params], Any]]] = None):
+    def __init__(
+        self,
+        learning_rate: ScalarOrSchedule,
+        b1: float = 0.9,
+        b2: float = 0.999,
+        eps: float = 1e-8,
+        eps_root: float = 0.0,
+        threshold: float = 5.0,
+        use_weight_decay: bool = False,
+        l2_weight: float = 0.0,
+        l2_mask: Optional[Union[Any, Callable[[Params], Any]]] = None,
+    ):
         self.b1 = b1
         self.b2 = b2
         self.eps = eps
         self.eps_root = eps_root
         self.threshold = threshold
-        super(Radam, self).__init__(learning_rate=learning_rate, use_weight_decay=use_weight_decay, l2_weight=l2_weight,
-                                    l2_mask=l2_mask)
+        super(Radam, self).__init__(
+            learning_rate=learning_rate,
+            use_weight_decay=use_weight_decay,
+            l2_weight=l2_weight,
+            l2_mask=l2_mask,
+        )
 
     def create_transforms(self):
-        transforms = [transform.scale_by_radam(b1=self.b1, b2=self.b2, eps=self.eps, eps_root=self.eps_root, threshold=self.threshold)]
+        transforms = [
+            transform.scale_by_radam(
+                b1=self.b1,
+                b2=self.b2,
+                eps=self.eps,
+                eps_root=self.eps_root,
+                threshold=self.threshold,
+            )
+        ]
         return self._add_weight_decay_and_lr_transformations(transforms)
 
 
 class SGD(BaseWeightDecayOptimizer):
-    def __init__(self, learning_rate: ScalarOrSchedule,
-                 momentum: Optional[float] = None,
-                 nesterov: bool = False,
-                 accumulator_dtype: Optional[Any] = None,
-                 use_weight_decay: bool = False,
-                 l2_weight: float = 0.,
-                 l2_mask: Optional[Union[Any, Callable[[Params], Any]]] = None):
+    def __init__(
+        self,
+        learning_rate: ScalarOrSchedule,
+        momentum: Optional[float] = None,
+        nesterov: bool = False,
+        accumulator_dtype: Optional[Any] = None,
+        use_weight_decay: bool = False,
+        l2_weight: float = 0.0,
+        l2_mask: Optional[Union[Any, Callable[[Params], Any]]] = None,
+    ):
         self.momentum = momentum
         self.nesterov = nesterov
         self.accumulator_dtype = accumulator_dtype
-        super(SGD, self).__init__(learning_rate=learning_rate, use_weight_decay=use_weight_decay, l2_weight=l2_weight,
-                                  l2_mask=l2_mask)
+        super(SGD, self).__init__(
+            learning_rate=learning_rate,
+            use_weight_decay=use_weight_decay,
+            l2_weight=l2_weight,
+            l2_mask=l2_mask,
+        )
 
     def create_transforms(self):
-        transforms = [transform.trace(decay=self.momentum, nesterov=self.nesterov, accumulator_dtype=self.accumulator_dtype)
-                      if self.momentum is not None else identity()]
+        transforms = [
+            transform.trace(
+                decay=self.momentum,
+                nesterov=self.nesterov,
+                accumulator_dtype=self.accumulator_dtype,
+            )
+            if self.momentum is not None
+            else identity()
+        ]
         return self._add_weight_decay_and_lr_transformations(transforms)

@@ -5,11 +5,15 @@ from functools import partial
 from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
 
-dump_folder = '../dataset_dumps/'
+dump_folder = "../dataset_dumps/"
 
 
 def read_and_crop(image_filename):
-    return Image.open(os.path.join(dump_folder, 'img_align_celeba', image_filename)).convert("RGB").crop((15, 40, 178 - 15, 218 - 30))
+    return (
+        Image.open(os.path.join(dump_folder, "img_align_celeba", image_filename))
+        .convert("RGB")
+        .crop((15, 40, 178 - 15, 218 - 30))
+    )
 
 
 def save(path, image_filename, image):
@@ -17,7 +21,7 @@ def save(path, image_filename, image):
 
 
 def process_one_file(image_filename, split):
-    output_folder = os.path.join('../datasets/celebA', split)
+    output_folder = os.path.join("../datasets/celebA", split)
     os.makedirs(output_folder, exist_ok=True)
 
     image = read_and_crop(image_filename)
@@ -25,7 +29,11 @@ def process_one_file(image_filename, split):
 
 
 def get_partitioned_filenames():
-    partition_list = pd.read_csv(os.path.join(dump_folder, 'list_eval_partition.txt'), sep=' ', names=['filenames', 'partition'])
+    partition_list = pd.read_csv(
+        os.path.join(dump_folder, "list_eval_partition.txt"),
+        sep=" ",
+        names=["filenames", "partition"],
+    )
     train_filenames = partition_list[partition_list.partition == 0]
     val_filenames = partition_list[partition_list.partition == 1]
     test_filenames = partition_list[partition_list.partition == 2]
@@ -33,15 +41,18 @@ def get_partitioned_filenames():
 
 
 def main():
-    splits = ['train_data', 'val_data', 'synthesis_data']
+    splits = ["train_data", "val_data", "synthesis_data"]
     all_filenames = get_partitioned_filenames()
 
     for split, split_filenames in zip(splits, all_filenames):
-        print(f'Processing {split}..')
+        print(f"Processing {split}..")
         executor = ProcessPoolExecutor(max_workers=256)
-        futures = [executor.submit(partial(process_one_file, filename, split)) for filename in split_filenames]
+        futures = [
+            executor.submit(partial(process_one_file, filename, split))
+            for filename in split_filenames
+        ]
         _ = [future.result() for future in tqdm(futures)]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

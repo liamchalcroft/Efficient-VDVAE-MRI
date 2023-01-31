@@ -22,7 +22,7 @@ class Interpolate(nn.Module):
         self.scale = scale
 
     def forward(self, x):
-        x = F.interpolate(x, scale_factor=self.scale, mode='nearest')
+        x = F.interpolate(x, scale_factor=self.scale, mode="nearest")
         return x
 
 
@@ -36,18 +36,27 @@ class Unpoolayer(nn.Module):
         else:
             self.strides = strides
 
-        ops = [Conv2d(in_channels=in_filters, out_channels=filters, kernel_size=(1, 1), stride=(1, 1),
-                      padding='same'),
-               nn.LeakyReLU(negative_slope=0.1),
-               Interpolate(scale=self.strides)]
+        ops = [
+            Conv2d(
+                in_channels=in_filters,
+                out_channels=filters,
+                kernel_size=(1, 1),
+                stride=(1, 1),
+                padding="same",
+            ),
+            nn.LeakyReLU(negative_slope=0.1),
+            Interpolate(scale=self.strides),
+        ]
 
-        self.register_parameter('scale_bias', None)
+        self.register_parameter("scale_bias", None)
 
         self.ops = nn.Sequential(*ops)
 
     def reset_parameters(self, inputs):
         B, C, H, W = inputs.shape
-        self.scale_bias = nn.Parameter(torch.zeros(size=(1, C, H, W), device='cuda'), requires_grad=True)
+        self.scale_bias = nn.Parameter(
+            torch.zeros(size=(1, C, H, W), device=inputs.device), requires_grad=True
+        )
 
     def forward(self, x):
         x = self.ops(x)
@@ -65,9 +74,16 @@ class PoolLayer(nn.Module):
         if isinstance(strides, int):
             strides = (strides, strides)
 
-        ops = [Conv2d(in_channels=in_filters, out_channels=filters,
-                      kernel_size=strides, stride=strides, padding='same'),
-               nn.LeakyReLU(negative_slope=0.1)]
+        ops = [
+            Conv2d(
+                in_channels=in_filters,
+                out_channels=filters,
+                kernel_size=strides,
+                stride=strides,
+                padding="same",
+            ),
+            nn.LeakyReLU(negative_slope=0.1),
+        ]
 
         self.ops = nn.Sequential(*ops)
 
@@ -77,8 +93,17 @@ class PoolLayer(nn.Module):
 
 
 class ResidualConvCell(nn.Module):
-    def __init__(self, n_layers, in_filters, bottleneck_ratio, kernel_size, init_scaler
-                 , residual=True, use_1x1=True, output_ratio=1.0):
+    def __init__(
+        self,
+        n_layers,
+        in_filters,
+        bottleneck_ratio,
+        kernel_size,
+        init_scaler,
+        residual=True,
+        use_1x1=True,
+        output_ratio=1.0,
+    ):
         super(ResidualConvCell, self).__init__()
 
         self.residual = residual
@@ -92,27 +117,39 @@ class ResidualConvCell(nn.Module):
         output_filters = int(in_filters * output_ratio)
         bottlneck_filters = int(in_filters * bottleneck_ratio)
 
-        convs = [nn.SiLU(inplace=False),
-                 nn.Conv2d(in_channels=in_filters,
-                           out_channels=bottlneck_filters,
-                           kernel_size=(1, 1) if use_1x1 else kernel_size,
-                           stride=(1, 1),
-                           padding='same')]
+        convs = [
+            nn.SiLU(inplace=False),
+            nn.Conv2d(
+                in_channels=in_filters,
+                out_channels=bottlneck_filters,
+                kernel_size=(1, 1) if use_1x1 else kernel_size,
+                stride=(1, 1),
+                padding="same",
+            ),
+        ]
 
         for _ in range(n_layers):
             convs.append(nn.SiLU(inplace=False))
-            convs.append(Conv2d(in_channels=bottlneck_filters,
-                                out_channels=bottlneck_filters,
-                                kernel_size=kernel_size,
-                                stride=(1, 1),
-                                padding='same'))
+            convs.append(
+                Conv2d(
+                    in_channels=bottlneck_filters,
+                    out_channels=bottlneck_filters,
+                    kernel_size=kernel_size,
+                    stride=(1, 1),
+                    padding="same",
+                )
+            )
 
-        convs += [nn.SiLU(inplace=False),
-                  Conv2d(in_channels=bottlneck_filters,
-                         out_channels=output_filters,
-                         kernel_size=(1, 1) if use_1x1 else kernel_size,
-                         stride=(1, 1),
-                         padding='same')]
+        convs += [
+            nn.SiLU(inplace=False),
+            Conv2d(
+                in_channels=bottlneck_filters,
+                out_channels=output_filters,
+                kernel_size=(1, 1) if use_1x1 else kernel_size,
+                stride=(1, 1),
+                padding="same",
+            ),
+        ]
 
         convs[-1].weight.data *= init_scaler
 
@@ -130,28 +167,50 @@ class ResidualConvCell(nn.Module):
 
 
 class LevelBlockUp(nn.Module):
-    def __init__(self, n_blocks, n_layers, in_filters, filters, bottleneck_ratio,
-                 kernel_size, strides, skip_filters, use_skip):
+    def __init__(
+        self,
+        n_blocks,
+        n_layers,
+        in_filters,
+        filters,
+        bottleneck_ratio,
+        kernel_size,
+        strides,
+        skip_filters,
+        use_skip,
+    ):
         super(LevelBlockUp, self).__init__()
         self.strides = strides
         self.use_skip = use_skip
-        self.residual_block = nn.Sequential(*[
-            ResidualConvCell(
-                n_layers=n_layers,
-                in_filters=in_filters,
-                bottleneck_ratio=bottleneck_ratio,
-                kernel_size=kernel_size,
-                init_scaler=np.sqrt(1. / float(sum(hparams.model.down_n_blocks_per_res) + len(
-                    hparams.model.down_strides))) if hparams.model.stable_init else 1.,
-                use_1x1=hparams.model.use_1x1_conv
-            )
-            for _ in range(n_blocks)
-        ])
+        self.residual_block = nn.Sequential(
+            *[
+                ResidualConvCell(
+                    n_layers=n_layers,
+                    in_filters=in_filters,
+                    bottleneck_ratio=bottleneck_ratio,
+                    kernel_size=kernel_size,
+                    init_scaler=np.sqrt(
+                        1.0
+                        / float(
+                            sum(hparams.model.down_n_blocks_per_res)
+                            + len(hparams.model.down_strides)
+                        )
+                    )
+                    if hparams.model.stable_init
+                    else 1.0,
+                    use_1x1=hparams.model.use_1x1_conv,
+                )
+                for _ in range(n_blocks)
+            ]
+        )
 
         if self.use_skip:
             self.skip_projection = Conv2d(
-                in_channels=in_filters, out_channels=skip_filters, kernel_size=(1, 1), stride=(1, 1),
-                padding='same'
+                in_channels=in_filters,
+                out_channels=skip_filters,
+                kernel_size=(1, 1),
+                stride=(1, 1),
+                padding="same",
             )
         if self.strides > 1:
             self.pool = PoolLayer(in_filters, filters, strides)
@@ -172,8 +231,20 @@ class LevelBlockUp(nn.Module):
 
 
 class LevelBlockDown(nn.Module):
-    def __init__(self, n_blocks, n_layers, in_filters, filters, bottleneck_ratio, kernel_size,
-                 strides, skip_filters, latent_variates, first_block, last_block):
+    def __init__(
+        self,
+        n_blocks,
+        n_layers,
+        in_filters,
+        filters,
+        bottleneck_ratio,
+        kernel_size,
+        strides,
+        skip_filters,
+        latent_variates,
+        first_block,
+        last_block,
+    ):
         super(LevelBlockDown, self).__init__()
 
         self.first_block = first_block
@@ -187,47 +258,62 @@ class LevelBlockDown(nn.Module):
             self.unpool = Unpoolayer(in_filters, filters, strides)
             in_filters = filters
 
-        self.residual_block = nn.Sequential(*[
+        self.residual_block = nn.Sequential(
+            *[
+                ResidualConvCell(
+                    n_layers=n_layers,
+                    in_filters=in_filters,
+                    bottleneck_ratio=bottleneck_ratio,
+                    kernel_size=kernel_size,
+                    init_scaler=np.sqrt(
+                        1.0
+                        / float(
+                            sum(hparams.model.down_n_blocks_per_res)
+                            + len(hparams.model.down_strides)
+                        )
+                    )
+                    if hparams.model.stable_init
+                    else 1.0,
+                    use_1x1=hparams.model.use_1x1_conv,
+                )
+                for _ in range(n_blocks)
+            ]
+        )
+
+        self.posterior_net = nn.Sequential(
+            ResidualConvCell(
+                n_layers=n_layers,
+                in_filters=in_filters + skip_filters,
+                bottleneck_ratio=bottleneck_ratio * 0.5,
+                kernel_size=kernel_size,
+                init_scaler=1.0,
+                residual=False,
+                use_1x1=hparams.model.use_1x1_conv,
+                output_ratio=0.5,  # Assuming skip_filters == in_filters
+            )
+        )
+
+        self.prior_net = nn.Sequential(
             ResidualConvCell(
                 n_layers=n_layers,
                 in_filters=in_filters,
                 bottleneck_ratio=bottleneck_ratio,
                 kernel_size=kernel_size,
-                init_scaler=np.sqrt(1. / float(sum(hparams.model.down_n_blocks_per_res) + len(
-                    hparams.model.down_strides))) if hparams.model.stable_init else 1.,
-                use_1x1=hparams.model.use_1x1_conv
+                init_scaler=0.0
+                if hparams.model.initialize_prior_weights_as_zero
+                else 1.0,
+                residual=False,
+                use_1x1=hparams.model.use_1x1_conv,
+                output_ratio=2.0,
             )
-            for _ in range(n_blocks)
-        ])
+        )
 
-        self.posterior_net = nn.Sequential(ResidualConvCell(
-            n_layers=n_layers,
-            in_filters=in_filters + skip_filters,
-            bottleneck_ratio=bottleneck_ratio * 0.5,
-            kernel_size=kernel_size,
-            init_scaler=1.,
-            residual=False,
-            use_1x1=hparams.model.use_1x1_conv,
-            output_ratio=0.5  # Assuming skip_filters == in_filters
-        ))
-
-        self.prior_net = nn.Sequential(ResidualConvCell(
-            n_layers=n_layers,
-            in_filters=in_filters,
-            bottleneck_ratio=bottleneck_ratio,
-            kernel_size=kernel_size,
-            init_scaler=0. if hparams.model.initialize_prior_weights_as_zero else 1.,
-            residual=False,
-            use_1x1=hparams.model.use_1x1_conv,
-            output_ratio=2.0
-        ))
-
-        self.prior_layer = GaussianLatentLayer(in_filters=in_filters,
-                                               num_variates=latent_variates
-                                               )
-        self.posterior_layer = GaussianLatentLayer(in_filters=in_filters,
-                                                   num_variates=latent_variates
-                                                   )
+        self.prior_layer = GaussianLatentLayer(
+            in_filters=in_filters, num_variates=latent_variates
+        )
+        self.posterior_layer = GaussianLatentLayer(
+            in_filters=in_filters, num_variates=latent_variates
+        )
         self.latent_embeddings = None
 
         self.z_projection = Conv2d(
@@ -235,10 +321,15 @@ class LevelBlockDown(nn.Module):
             out_channels=filters,
             kernel_size=(1, 1),
             stride=(1, 1),
-            padding='same'
+            padding="same",
         )
         self.z_projection.weight.data *= np.sqrt(
-            1. / float(sum(hparams.model.down_n_blocks_per_res) + len(hparams.model.down_strides)))
+            1.0
+            / float(
+                sum(hparams.model.down_n_blocks_per_res)
+                + len(hparams.model.down_strides)
+            )
+        )
 
     def sampler(self, latent_fn, y, prior_stats=None, temperature=None):
         z, dist = latent_fn(y, prior_stats=prior_stats, temperature=temperature)
@@ -267,7 +358,9 @@ class LevelBlockDown(nn.Module):
 
         # Prior under expected value of q(z<i|x)
         if variate_mask is None:
-            z_prior_kl, prior_kl_dist = self.get_analytical_distribution(self.prior_layer, y_prior_kl)
+            z_prior_kl, prior_kl_dist = self.get_analytical_distribution(
+                self.prior_layer, y_prior_kl
+            )
 
         else:
             z_prior_kl, prior_kl_dist = self.sampler(self.prior_layer, y_prior_kl)
@@ -276,15 +369,20 @@ class LevelBlockDown(nn.Module):
         z_post, posterior_dist = self.sampler(
             self.posterior_layer,
             y_post,
-            prior_stats=prior_kl_dist if hparams.model.use_residual_distribution else None)
+            prior_stats=prior_kl_dist
+            if hparams.model.use_residual_distribution
+            else None,
+        )
 
         if variate_mask is not None:
-            variate_mask = torch.Tensor(variate_mask)[None, :, None, None].cuda()
+            variate_mask = torch.Tensor(variate_mask)[None, :, None, None].to(
+                x_skip.device
+            )
             # Only used in inference mode to prune turned-off variates
             # Use posterior sample from meaningful variates, and prior sample from "turned-off" variates
             # The NLL should be similar to using z_post without masking if the mask is good (not very destructive)
             # variate_mask automatically broadcasts to [batch_size, H, W, n_variates]
-            z_post = variate_mask * z_post + (1. - variate_mask) * z_prior_kl
+            z_post = variate_mask * z_post + (1.0 - variate_mask) * z_prior_kl
 
         # Residual with prior
         y = y + kl_residual

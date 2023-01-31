@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-export NUM_GPUS_PER_NODE=2
+export NUM_GPUS_PER_NODE=0
 export NCCL_LL_THRESHOLD=0
 
 # launch your script w/ `torch.distributed.launch`

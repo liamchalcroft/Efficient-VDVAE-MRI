@@ -39,8 +39,7 @@ class Adamax(Optimizer):
     __ https://arxiv.org/abs/1412.6980
     """
 
-    def __init__(self, params, lr=2e-3, betas=(0.9, 0.999), eps=1e-8,
-                 weight_decay=0):
+    def __init__(self, params, lr=2e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -70,63 +69,67 @@ class Adamax(Optimizer):
 
         for group in self.param_groups:
 
-            for i, p in enumerate(group['params']):
+            for i, p in enumerate(group["params"]):
 
                 if p.grad is None:
                     continue
                 grad = p.grad.data
                 if grad.is_sparse:
-                    raise RuntimeError('Adamax does not support sparse gradients')
+                    raise RuntimeError("Adamax does not support sparse gradients")
                 state = self.state[p]
 
                 # State initialization
                 if len(state) == 0:
-                    state['step'] = 0
+                    state["step"] = 0
                     # state['exp_avg'] = torch.zeros_like(p.data, memory_format=torch.preserve_format)
                     # state['exp_inf'] = torch.zeros_like(p.data, memory_format=torch.preserve_format)
-                    state['exp_avg'] = torch.zeros_like(p.data)
-                    state['exp_inf'] = torch.zeros_like(p.data)
+                    state["exp_avg"] = torch.zeros_like(p.data)
+                    state["exp_inf"] = torch.zeros_like(p.data)
 
-                state['step'] += 1
+                state["step"] += 1
 
                 if p.shape not in params:
-                    params[p.shape] = {'idx': 0, 'data': []}
+                    params[p.shape] = {"idx": 0, "data": []}
                     grads[p.shape] = []
                     exp_avg[p.shape] = []
                     exp_inf[p.shape] = []
 
-                params[p.shape]['data'].append(p.data)
+                params[p.shape]["data"].append(p.data)
                 grads[p.shape].append(grad)
-                exp_avg[p.shape].append(state['exp_avg'])
-                exp_inf[p.shape].append(state['exp_inf'])
+                exp_avg[p.shape].append(state["exp_avg"])
+                exp_inf[p.shape].append(state["exp_inf"])
 
         for i in params:
-            params[i]['data'] = torch.stack(params[i]['data'], dim=0)
+            params[i]["data"] = torch.stack(params[i]["data"], dim=0)
             grads[i] = torch.stack(grads[i], dim=0)
-            exp_avg[i] = torch.stack(exp_avg[i], dim=0).cuda()
-            exp_inf[i] = torch.stack(exp_inf[i], dim=0).cuda()
+            exp_avg[i] = torch.stack(exp_avg[i], dim=0).to(params[i]["data"].device)
+            exp_inf[i] = torch.stack(exp_inf[i], dim=0).to(params[i]["data"].device)
 
         for group in self.param_groups:
-            beta1, beta2 = group['betas']
-            eps = group['eps']
-            bias_correction = 1 - beta1 ** self.state[group['params'][0]]['step']
-            clr = group['lr'] / bias_correction
+            beta1, beta2 = group["betas"]
+            eps = group["eps"]
+            bias_correction = 1 - beta1 ** self.state[group["params"][0]]["step"]
+            clr = group["lr"] / bias_correction
 
             for i in params:
-                if group['weight_decay'] != 0:
-                    grads[i] = grads[i].add_(params[i]['data'], alpha=group['weight_decay'])
+                if group["weight_decay"] != 0:
+                    grads[i] = grads[i].add_(
+                        params[i]["data"], alpha=group["weight_decay"]
+                    )
                 # Update biased first moment estimate.
                 exp_avg[i].mul_(beta1).add_(grads[i], alpha=1 - beta1)
                 # Update the exponentially weighted infinity norm.
-                torch.max(exp_inf[i].mul_(beta2), grads[i].abs_().add_(eps), out=exp_inf[i])
-                params[i]['data'].addcdiv_(exp_avg[i], exp_inf[i], value=-clr)
+                torch.max(
+                    exp_inf[i].mul_(beta2), grads[i].abs_().add_(eps), out=exp_inf[i]
+                )
+                params[i]["data"].addcdiv_(exp_avg[i], exp_inf[i], value=-clr)
 
         for group in self.param_groups:
-            for p in group['params']:
-                idx = params[p.shape]['idx']
-                p.data = params[p.shape]['data'][idx, :]
-                self.state[p]['exp_avg'] = exp_avg[p.shape][idx, :]
-                self.state[p]['exp_inf'] = exp_inf[p.shape][idx, :]
-                params[p.shape]['idx'] += 1
+            for p in group["params"]:
+                idx = params[p.shape]["idx"]
+                p.data = params[p.shape]["data"][idx, :]
+                self.state[p]["exp_avg"] = exp_avg[p.shape][idx, :]
+                self.state[p]["exp_inf"] = exp_inf[p.shape][idx, :]
+                params[p.shape]["idx"] += 1
 
         return loss

@@ -10,7 +10,7 @@ hparams = HParams.get_hparams_by_name("efficient_vdvae")
 
 
 def get_logdir():
-    return f'logs-{hparams.run.name}'
+    return f"logs-{hparams.run.name}"
 
 
 def transpose_dicts(dct):
@@ -27,14 +27,16 @@ def get_variate_masks(stats):
 
 
 def scale_pixels(img):
-    img = np.floor(img / np.uint8(2 ** (8 - hparams.data.num_bits))) * 2 ** (8 - hparams.data.num_bits)
-    shift = scale = (2 ** 8 - 1) / 2
+    img = np.floor(img / np.uint8(2 ** (8 - hparams.data.num_bits))) * 2 ** (
+        8 - hparams.data.num_bits
+    )
+    shift = scale = (2**8 - 1) / 2
     img = (img - shift) / scale  # Images are between [-1, 1]
     return img
 
 
 def effective_pixels():
-    if hparams.data.dataset_source == 'binarized_mnist':
+    if hparams.data.dataset_source == "binarized_mnist":
         return 28 * 28 * hparams.data.channels
     else:
         return hparams.data.target_res * hparams.data.target_res * hparams.data.channels
@@ -44,7 +46,7 @@ def one_hot(indices, depth, dim):
     indices = indices.unsqueeze(dim)
     size = list(indices.size())
     size[dim] = depth
-    y_onehot = torch.zeros(size, device=torch.device('cuda'))
+    y_onehot = torch.zeros(size, device=indices.device)
     y_onehot.zero_()
     y_onehot.scatter_(dim, indices, 1)
 
@@ -55,7 +57,8 @@ def count_parameters(model):
     table = PrettyTable(["Modules", "Parameters"])
     total_params = 0
     for name, parameter in model.named_parameters():
-        if not parameter.requires_grad: continue
+        if not parameter.requires_grad:
+            continue
         param = parameter.numel()
         table.add_row([name, param])
         total_params += param
@@ -65,31 +68,41 @@ def count_parameters(model):
 
 
 def assert_CUDA_and_hparams_gpus_are_equal():
-    print('Running on: ', torch.cuda.device_count(), ' GPUs')
+    print("Running on: ", torch.cuda.device_count(), " GPUs")
     assert hparams.run.num_gpus == torch.cuda.device_count()
 
 
 def load_checkpoint_if_exists(checkpoint_path, rank):
     try:
-        checkpoint = torch.load(checkpoint_path, map_location='cuda:{}'.format(rank))
+        if hparams.run.local == 1 and hparams.run.num_gpus == 0:
+            checkpoint = torch.load(
+                checkpoint_path,
+                map_location=("mps" if hparams.run.num_mps > 0 else "cpu"),
+            )
+        else:
+            checkpoint = torch.load(
+                checkpoint_path, map_location="cuda:{}".format(rank)
+            )
     except FileNotFoundError:
-        checkpoint = {'global_step': -1,
-                      'model_state_dict': None,
-                      'ema_model_state_dict': None,
-                      'optimizer_state_dict': None,
-                      'scheduler_state_dict': None}
+        checkpoint = {
+            "global_step": -1,
+            "model_state_dict": None,
+            "ema_model_state_dict": None,
+            "optimizer_state_dict": None,
+            "scheduler_state_dict": None,
+        }
     return checkpoint
 
 
-def create_checkpoint_manager_and_load_if_exists(model_directory='.', rank=0):
-    checkpoint_path = os.path.join(model_directory, f'checkpoints-{hparams.run.name}')
+def create_checkpoint_manager_and_load_if_exists(model_directory=".", rank=0):
+    checkpoint_path = os.path.join(model_directory, f"checkpoints-{hparams.run.name}")
     checkpoint = load_checkpoint_if_exists(checkpoint_path, rank)
 
     return checkpoint, checkpoint_path
 
 
 def get_logdir():
-    return f'logs-{hparams.run.name}'
+    return f"logs-{hparams.run.name}"
 
 
 def create_tb_writer(mode):

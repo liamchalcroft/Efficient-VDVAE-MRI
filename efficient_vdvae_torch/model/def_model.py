@@ -22,11 +22,18 @@ class UniversalAutoEncoder(nn.Module):
         In slow synthesis, it would be the concatenated previous outputs
         """
         if variate_masks is None:
-            variate_masks = [None] * (sum(hparams.model.down_n_blocks_per_res) + len(hparams.model.down_strides))
+            variate_masks = [None] * (
+                sum(hparams.model.down_n_blocks_per_res)
+                + len(hparams.model.down_strides)
+            )
         else:
-            assert len(variate_masks) == sum(hparams.model.down_n_blocks_per_res) + len(hparams.model.down_strides)
+            assert len(variate_masks) == sum(hparams.model.down_n_blocks_per_res) + len(
+                hparams.model.down_strides
+            )
 
         skip_list = self.bottom_up(x)
-        outputs, posterior_dist_list, prior_kl_dist_list = self.top_down(skip_list, variate_masks=variate_masks)
+        outputs, posterior_dist_list, prior_kl_dist_list = self.top_down(
+            skip_list, variate_masks=variate_masks
+        )
 
         return outputs, posterior_dist_list, prior_kl_dist_list

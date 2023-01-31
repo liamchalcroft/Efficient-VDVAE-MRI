@@ -5,7 +5,7 @@ hparams = HParams.get_hparams_by_name("efficient_vdvae")
 
 
 def min_max(x):
-    scale = shift = (2 ** 8 - 1) / 2
+    scale = shift = (2**8 - 1) / 2
     x = x * scale + shift  # [0, 255]
     x = np.round(x).astype(np.uint8)
     return x

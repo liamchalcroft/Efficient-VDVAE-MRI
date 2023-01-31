@@ -18,39 +18,46 @@ hparams = HParams.get_hparams_by_name("efficient_vdvae")
 
 
 class BottomUp(nn.Module):
-
     @nn.compact
     def __call__(self, key, x, training):
         # Input conv
-        x = Conv2D(filters=hparams.model.input_conv_filters,
-                   kernel_size=hparams.model.input_kernel_size,
-                   strides=1,
-                   padding='SAME',
-                   name='input_conv')(x)
+        x = Conv2D(
+            filters=hparams.model.input_conv_filters,
+            kernel_size=hparams.model.input_kernel_size,
+            strides=1,
+            padding="SAME",
+            name="input_conv",
+        )(x)
 
         # Bottom up blocks
         skip_list = []
         for i, stride in enumerate(hparams.model.up_strides):
-            key, downsample_key, *res_keys = random.split(key, num=hparams.model.up_n_blocks_per_res[i] + 2)
+            key, downsample_key, *res_keys = random.split(
+                key, num=hparams.model.up_n_blocks_per_res[i] + 2
+            )
 
             for j in range(hparams.model.up_n_blocks_per_res[i]):
-                x, _ = LevelBlockUp(n_blocks=hparams.model.up_n_blocks[i],
-                                    n_layers=hparams.model.up_n_layers[i],
-                                    filters=hparams.model.up_filters[i],
-                                    bottleneck_ratio=hparams.model.up_mid_filters_ratio[i],
-                                    kernel_size=hparams.model.up_kernel_size[i],
-                                    strides=1,
-                                    skip_filters=hparams.model.up_skip_filters[i],
-                                    name=f'block_up_level_{i}_{j}')(res_keys[j], x, use_skip=False, training=training)
+                x, _ = LevelBlockUp(
+                    n_blocks=hparams.model.up_n_blocks[i],
+                    n_layers=hparams.model.up_n_layers[i],
+                    filters=hparams.model.up_filters[i],
+                    bottleneck_ratio=hparams.model.up_mid_filters_ratio[i],
+                    kernel_size=hparams.model.up_kernel_size[i],
+                    strides=1,
+                    skip_filters=hparams.model.up_skip_filters[i],
+                    name=f"block_up_level_{i}_{j}",
+                )(res_keys[j], x, use_skip=False, training=training)
 
-            x, skip_out = LevelBlockUp(n_blocks=hparams.model.up_n_blocks[i],
-                                       n_layers=hparams.model.up_n_layers[i],
-                                       filters=hparams.model.up_filters[i],
-                                       bottleneck_ratio=hparams.model.up_mid_filters_ratio[i],
-                                       kernel_size=hparams.model.up_kernel_size[i],
-                                       strides=stride,
-                                       skip_filters=hparams.model.up_skip_filters[i],
-                                       name=f'block_up_level_{i}_downsample')(downsample_key, x, use_skip=True, training=training)
+            x, skip_out = LevelBlockUp(
+                n_blocks=hparams.model.up_n_blocks[i],
+                n_layers=hparams.model.up_n_layers[i],
+                filters=hparams.model.up_filters[i],
+                bottleneck_ratio=hparams.model.up_mid_filters_ratio[i],
+                kernel_size=hparams.model.up_kernel_size[i],
+                strides=stride,
+                skip_filters=hparams.model.up_skip_filters[i],
+                name=f"block_up_level_{i}_downsample",
+            )(downsample_key, x, use_skip=True, training=training)
 
             skip_list.append(skip_out)
 
@@ -62,45 +69,53 @@ class TopDown(nn.Module):
         H = W = compute_latent_dimension()
 
         # 1, H // strides, W // strides, C_dec
-        self.h = self.param('trainable_h',
-                            zeros,
-                            (1, H, W, hparams.model.down_filters[0]))
+        self.h = self.param(
+            "trainable_h", zeros, (1, H, W, hparams.model.down_filters[0])
+        )
 
         upsample_blocks_list = []
         block_sets_list = []
         for i, stride in enumerate(hparams.model.down_strides):
             upsample_blocks_list.append(
-                LevelBlockDown(n_blocks=hparams.model.down_n_blocks[i],
-                               n_layers=hparams.model.down_n_layers[i],
-                               filters=hparams.model.down_filters[i],
-                               bottleneck_ratio=hparams.model.down_mid_filters_ratio[i],
-                               kernel_size=hparams.model.down_kernel_size[i],
-                               strides=stride,
-                               latent_variates=hparams.model.down_latent_variates[i],
-                               name=f'block_down_level_{i}_upsample')
+                LevelBlockDown(
+                    n_blocks=hparams.model.down_n_blocks[i],
+                    n_layers=hparams.model.down_n_layers[i],
+                    filters=hparams.model.down_filters[i],
+                    bottleneck_ratio=hparams.model.down_mid_filters_ratio[i],
+                    kernel_size=hparams.model.down_kernel_size[i],
+                    strides=stride,
+                    latent_variates=hparams.model.down_latent_variates[i],
+                    name=f"block_down_level_{i}_upsample",
+                )
             )
 
             block_sets_list.append(
-                [LevelBlockDown(n_blocks=hparams.model.down_n_blocks[i],
-                                n_layers=hparams.model.down_n_layers[i],
-                                filters=hparams.model.down_filters[i],
-                                bottleneck_ratio=hparams.model.down_mid_filters_ratio[i],
-                                kernel_size=hparams.model.down_kernel_size[i],
-                                strides=1,
-                                latent_variates=hparams.model.down_latent_variates[i],
-                                name=f'block_down_level_{i}_{j}')
-                 for j in range(hparams.model.down_n_blocks_per_res[i])]
+                [
+                    LevelBlockDown(
+                        n_blocks=hparams.model.down_n_blocks[i],
+                        n_layers=hparams.model.down_n_layers[i],
+                        filters=hparams.model.down_filters[i],
+                        bottleneck_ratio=hparams.model.down_mid_filters_ratio[i],
+                        kernel_size=hparams.model.down_kernel_size[i],
+                        strides=1,
+                        latent_variates=hparams.model.down_latent_variates[i],
+                        name=f"block_down_level_{i}_{j}",
+                    )
+                    for j in range(hparams.model.down_n_blocks_per_res[i])
+                ]
             )
 
         self.upsample_blocks_list = upsample_blocks_list
         self.block_sets_list = block_sets_list
 
         self.output_layer = Conv2D(
-            filters=hparams.data.channels if hparams.data.dataset_source == 'binarized_mnist' else hparams.model.num_output_mixtures * (3 * hparams.data.channels + 1),
+            filters=hparams.data.channels
+            if hparams.data.dataset_source == "binarized_mnist"
+            else hparams.model.num_output_mixtures * (3 * hparams.data.channels + 1),
             kernel_size=hparams.model.output_kernel_size,
             strides=1,
-            padding='SAME',
-            name='output_conv'
+            padding="SAME",
+            name="output_conv",
         )
 
     def __call__(self, key, skip_list, variate_masks, training):
@@ -109,15 +124,29 @@ class TopDown(nn.Module):
         posterior_dist_list = []
         prior_kl_dist_list = []
         layer_idx = 0
-        for i, (upsample_block, block_set, skip_input) in enumerate(zip(self.upsample_blocks_list, self.block_sets_list, skip_list)):
+        for i, (upsample_block, block_set, skip_input) in enumerate(
+            zip(self.upsample_blocks_list, self.block_sets_list, skip_list)
+        ):
             key, upsample_key, *res_keys = random.split(key, num=len(block_set) + 2)
-            y, posterior_dist, prior_kl_dist = upsample_block(upsample_key, skip_input, y, variate_mask=variate_masks[layer_idx], training=training)
+            y, posterior_dist, prior_kl_dist = upsample_block(
+                upsample_key,
+                skip_input,
+                y,
+                variate_mask=variate_masks[layer_idx],
+                training=training,
+            )
             layer_idx += 1
 
             resolution_posterior_dist = [posterior_dist]
             resolution_prior_kl_dist = [prior_kl_dist]
             for j, block in enumerate(block_set):
-                y, posterior_dist, prior_kl_dist = block(res_keys[j], skip_input, y, variate_mask=variate_masks[layer_idx], training=training)
+                y, posterior_dist, prior_kl_dist = block(
+                    res_keys[j],
+                    skip_input,
+                    y,
+                    variate_mask=variate_masks[layer_idx],
+                    training=training,
+                )
                 layer_idx += 1
 
                 resolution_posterior_dist.append(posterior_dist)
@@ -133,14 +162,20 @@ class TopDown(nn.Module):
         y = jnp.tile(self.h, [batch_size, 1, 1, 1])
 
         prior_zs = []
-        for i, (upsample_block, block_set, temperature) in enumerate(zip(self.upsample_blocks_list, self.block_sets_list, temperatures)):
+        for i, (upsample_block, block_set, temperature) in enumerate(
+            zip(self.upsample_blocks_list, self.block_sets_list, temperatures)
+        ):
             # Temperatures are assumed to be equal in-between skip connections.
             key, upsample_key, *res_keys = random.split(key, num=len(block_set) + 2)
-            y, z = upsample_block.sample_from_prior(upsample_key, y, training=training, temperature=temperature)
+            y, z = upsample_block.sample_from_prior(
+                upsample_key, y, training=training, temperature=temperature
+            )
 
             level_z = [z]
             for j, block in enumerate(block_set):
-                y, z = block.sample_from_prior(res_keys[j], y, training=training, temperature=temperature)
+                y, z = block.sample_from_prior(
+                    res_keys[j], y, training=training, temperature=temperature
+                )
                 level_z.append(z)
 
             prior_zs += level_z

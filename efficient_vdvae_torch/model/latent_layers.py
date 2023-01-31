@@ -49,7 +49,7 @@ class GaussianLatentLayer(nn.Module):
             out_channels=num_variates * 2,
             kernel_size=(1, 1),
             stride=(1, 1),
-            padding='same'
+            padding="same",
         )
 
         self.min_std = min_std
@@ -58,12 +58,14 @@ class GaussianLatentLayer(nn.Module):
     def forward(self, x, temperature=None, prior_stats=None, return_sample=True):
         x = self.projection(x)
 
-        if hparams.model.distribution_base == 'std':
+        if hparams.model.distribution_base == "std":
             mean, std, stats = _std_mode(x, prior_stats, self.softplus)
-        elif hparams.model.distribution_base == 'logstd':
+        elif hparams.model.distribution_base == "logstd":
             mean, std, stats = _logstd_mode(x, prior_stats)
         else:
-            raise ValueError(f'distribution base {hparams.model.distribution_base} not known!!')
+            raise ValueError(
+                f"distribution base {hparams.model.distribution_base} not known!!"
+            )
 
         if temperature is not None:
             std = std * temperature
@@ -76,6 +78,6 @@ class GaussianLatentLayer(nn.Module):
 
 @torch.jit.script
 def calculate_z(mean, std):
-    eps = torch.empty_like(mean, device=torch.device('cuda')).normal_(0., 1.)
+    eps = torch.empty_like(mean, device=mean.device).normal_(0.0, 1.0)
     z = eps * std + mean
     return z, mean, std

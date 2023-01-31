@@ -28,7 +28,7 @@ def stable_init(scale, dtype=jnp.float_):
     return init
 
 
-def uniform_init(minval=0., maxval=1., dtype=jnp.float_):
+def uniform_init(minval=0.0, maxval=1.0, dtype=jnp.float_):
     def init(key, shape, dtype=dtype):
         dtype = dtypes.canonicalize_dtype(dtype)
         return random.uniform(key, shape, dtype, minval=minval, maxval=maxval)
@@ -38,10 +38,11 @@ def uniform_init(minval=0., maxval=1., dtype=jnp.float_):
 
 class Conv2D(nn.Module):
     """A Conv2D special case of the general jax Conv class."""
+
     filters: int
     kernel_size: Union[int, Iterable[int]]
     strides: Union[None, int, Iterable[int]] = 1
-    padding: Union[str, Iterable[Tuple[int, int]]] = 'SAME'
+    padding: Union[str, Iterable[Tuple[int, int]]] = "SAME"
     input_dilation: Union[None, int, Iterable[int]] = 1
     kernel_dilation: Union[None, int, Iterable[int]] = 1
     feature_group_count: int = 1
@@ -55,16 +56,24 @@ class Conv2D(nn.Module):
     def __call__(self, inputs: Array) -> Array:
         return nn.Conv(
             features=self.filters,
-            kernel_size=(self.kernel_size, self.kernel_size) if isinstance(self.kernel_size, int) else self.kernel_size,
-            strides=(self.strides, self.strides) if isinstance(self.strides, int) else self.strides,
+            kernel_size=(self.kernel_size, self.kernel_size)
+            if isinstance(self.kernel_size, int)
+            else self.kernel_size,
+            strides=(self.strides, self.strides)
+            if isinstance(self.strides, int)
+            else self.strides,
             padding=self.padding,
-            input_dilation=(self.input_dilation, self.input_dilation) if isinstance(self.input_dilation, int) else self.input_dilation,
-            kernel_dilation=(self.kernel_dilation, self.kernel_dilation) if isinstance(self.kernel_dilation, int) else self.kernel_dilation,
+            input_dilation=(self.input_dilation, self.input_dilation)
+            if isinstance(self.input_dilation, int)
+            else self.input_dilation,
+            kernel_dilation=(self.kernel_dilation, self.kernel_dilation)
+            if isinstance(self.kernel_dilation, int)
+            else self.kernel_dilation,
             feature_group_count=self.feature_group_count,
             use_bias=self.use_bias,
             dtype=self.dtype,
             precision=self.precision,
             kernel_init=self.kernel_init,
             bias_init=self.bias_init,
-            name='conv'
+            name="conv",
         )(inputs)

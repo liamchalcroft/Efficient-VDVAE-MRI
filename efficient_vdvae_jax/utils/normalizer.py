@@ -8,9 +8,13 @@ hparams = HParams.get_hparams_by_name("efficient_vdvae")
 
 def reduce_bits_fn(x, use_tf):
     if use_tf:
-        x = tf.math.floor(x / np.uint8(2 ** (8 - hparams.data.num_bits))) * 2 ** (8 - hparams.data.num_bits)  # [0, 255]
+        x = tf.math.floor(x / np.uint8(2 ** (8 - hparams.data.num_bits))) * 2 ** (
+            8 - hparams.data.num_bits
+        )  # [0, 255]
     else:
-        x = np.floor(x / np.uint8(2 ** (8 - hparams.data.num_bits))) * 2 ** (8 - hparams.data.num_bits)
+        x = np.floor(x / np.uint8(2 ** (8 - hparams.data.num_bits))) * 2 ** (
+            8 - hparams.data.num_bits
+        )
     return x
 
 
@@ -18,7 +22,7 @@ def min_max(x, reduce_bits, use_tf):
     if reduce_bits:
         x = reduce_bits_fn(x, use_tf)
 
-    scale = shift = (2 ** 8 - 1) / 2
+    scale = shift = (2**8 - 1) / 2
     return (x - shift) / scale  # [-1, 1]
 
 

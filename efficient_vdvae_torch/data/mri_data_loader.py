@@ -6,6 +6,7 @@ from sklearn.utils import shuffle
 from hparams import HParams
 from PIL import Image
 from torch.utils.data.distributed import DistributedSampler
+import glob
 
 hparams = HParams.get_hparams_by_name("efficient_vdvae")
 
@@ -42,7 +43,7 @@ class MinMax(object):
 
         shift = scale = (2**8 - 1) / 2
         img = (img - shift) / scale  # Images are between [-1, 1]
-        return torch.tensor(img).permute(2, 0, 1).contiguous().float()
+        return torch.tensor(img).contiguous().float()[None]
 
     def __repr__(self):
         return self.__class__.__name__ + "()"
@@ -72,20 +73,17 @@ valid_transform = transforms.Compose(
 )
 
 
-def create_filenames_list(path):
-    filenames = sorted(os.listdir(path))
-    files = [os.path.join(path, f) for f in filenames]
+def create_filenames_list_ixi(path):
+    files = glob.glob(os.path.join(path, "*l1.png"))
+    files = [f.replace("_l1", "") for f in files]
+    filenames = [f.split("/")[-1] for f in files]
     print(path, len(files))
     return files, filenames
 
 
 def read_resize_image(image_file):
-    return (
-        Image.open(image_file)
-        .convert("RGB")
-        .resize(
-            (hparams.data.target_res, hparams.data.target_res), resample=Image.BILINEAR
-        )
+    return Image.open(image_file).resize(
+        (hparams.data.target_res, hparams.data.target_res), resample=Image.BILINEAR
     )
 
 
@@ -128,17 +126,23 @@ class generic_dataset(torch.utils.data.Dataset):
             return round(len(self.files) * hparams.synthesis.div_stats_subset_ratio)
 
 
-def train_val_data_generic(
+def train_val_data_ixi(
     train_images, train_filenames, val_images, val_filenames, world_size, rank
 ):
     train_data = generic_dataset(train_images, train_filenames, mode="train")
-    train_sampler = DistributedSampler(
-        train_data, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
+    train_sampler = (
+        DistributedSampler(
+            train_data, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
+        )
+        if hparams.run.local == 0
+        else None
     )
     train_loader = torch.utils.data.DataLoader(
         sampler=train_sampler,
         dataset=train_data,
-        batch_size=hparams.train.batch_size // hparams.run.num_gpus,
+        batch_size=hparams.train.batch_size
+        if hparams.run.num_gpus == 0
+        else hparams.train.batch_size // hparams.run.num_gpus,
         shuffle=False,
         pin_memory=True,
         num_workers=2,
@@ -147,13 +151,19 @@ def train_val_data_generic(
     )
 
     val_data = generic_dataset(val_images, val_filenames, mode="val")
-    val_sampler = DistributedSampler(
-        val_data, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
+    val_sampler = (
+        DistributedSampler(
+            val_data, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
+        )
+        if hparams.run.local == 0
+        else None
     )
     val_loader = torch.utils.data.DataLoader(
         sampler=val_sampler,
         dataset=val_data,
-        batch_size=hparams.val.batch_size // hparams.run.num_gpus,
+        batch_size=hparams.val.batch_size
+        if hparams.run.num_gpus == 0
+        else hparams.val.batch_size // hparams.run.num_gpus,
         shuffle=False,
         pin_memory=True,
         num_workers=2,
@@ -165,7 +175,7 @@ def train_val_data_generic(
 
 
 def synth_generic_data():
-    synth_images, synth_filenames = create_filenames_list(
+    synth_images, synth_filenames = create_filenames_list_ixi(
         hparams.data.synthesis_data_path
     )
     synth_data = generic_dataset(synth_images, synth_filenames, mode="test")
@@ -181,7 +191,7 @@ def synth_generic_data():
 
 
 def encode_generic_data():
-    images, filenames = create_filenames_list(hparams.data.train_data_path)
+    images, filenames = create_filenames_list_ixi(hparams.data.train_data_path)
     data = generic_dataset(images, filenames, mode="encode")
     data_loader = torch.utils.data.DataLoader(
         dataset=data,
@@ -195,7 +205,7 @@ def encode_generic_data():
 
 
 def stats_generic_data():
-    images, filenames = create_filenames_list(hparams.data.train_data_path)
+    images, filenames = create_filenames_list_ixi(hparams.data.train_data_path)
     data = generic_dataset(images, filenames, mode="div_stats")
     data_loader = torch.utils.data.DataLoader(
         dataset=data,

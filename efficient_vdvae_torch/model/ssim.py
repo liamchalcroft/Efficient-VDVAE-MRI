@@ -14,7 +14,15 @@ except (ImportError, ValueError):
 
 
 class SSIM(torch.nn.Module):
-    def __init__(self, image_channels, max_val, filter_size=11, filter_sigma=1.5, k1=0.01, k2=0.03):
+    def __init__(
+        self,
+        image_channels,
+        max_val,
+        filter_size=11,
+        filter_sigma=1.5,
+        k1=0.01,
+        k2=0.03,
+    ):
         super(SSIM, self).__init__()
         self.max_val = max_val
 
@@ -22,7 +30,7 @@ class SSIM(torch.nn.Module):
         self.k2 = k2
         self.filter_size = filter_size
 
-        self.compensation = 1.
+        self.compensation = 1.0
 
         self.kernel = SSIM._fspecial_gauss(filter_size, filter_sigma, image_channels)
 
@@ -39,13 +47,18 @@ class SSIM(torch.nn.Module):
         g = torch.reshape(g, shape=(1, -1))  # For tf.nn.softmax().
         g = F.softmax(g, dim=-1)
         g = torch.reshape(g, shape=(1, 1, filter_size, filter_size))
-        return torch.tile(g, (image_channels, 1, 1, 1)).cuda()  # out_c, in_c // groups, h, w
+        return torch.tile(g, (image_channels, 1, 1, 1))  # out_c, in_c // groups, h, w
 
     def _apply_filter(self, x):
         shape = list(x.size())
         x = torch.reshape(x, shape=[-1] + shape[-3:])  # b , c , h , w
-        y = F.conv2d(x, weight=self.kernel, stride=1, padding=(self.filter_size - 1) // 2,
-                     groups=x.shape[1])  # b, c, h, w
+        y = F.conv2d(
+            x,
+            weight=self.kernel,
+            stride=1,
+            padding=(self.filter_size - 1) // 2,
+            groups=x.shape[1],
+        )  # b, c, h, w
         return torch.reshape(y, shape[:-3] + list(y.size()[1:]))
 
     def _compute_luminance_contrast_structure(self, x, y):
@@ -78,5 +91,6 @@ class SSIM(torch.nn.Module):
         return (luminance * contrast_structure).mean(dim=(-2, -1))
 
     def forward(self, targets, outputs):
+        self.kernel = self.kernel.to(outputs.device)
         ssim_per_channel = self._compute_one_channel_ssim(targets, outputs)
         return ssim_per_channel.mean(dim=-1)

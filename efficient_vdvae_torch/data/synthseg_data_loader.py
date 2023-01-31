@@ -6,6 +6,7 @@ from sklearn.utils import shuffle
 from hparams import HParams
 from PIL import Image
 from torch.utils.data.distributed import DistributedSampler
+import glob
 
 hparams = HParams.get_hparams_by_name("efficient_vdvae")
 
@@ -42,7 +43,7 @@ class MinMax(object):
 
         shift = scale = (2**8 - 1) / 2
         img = (img - shift) / scale  # Images are between [-1, 1]
-        return torch.tensor(img).permute(2, 0, 1).contiguous().float()
+        return torch.tensor(img).contiguous().float()[None]
 
     def __repr__(self):
         return self.__class__.__name__ + "()"
@@ -72,20 +73,49 @@ valid_transform = transforms.Compose(
 )
 
 
-def create_filenames_list(path):
-    filenames = sorted(os.listdir(path))
-    files = [os.path.join(path, f) for f in filenames]
+def create_filenames_list_synthseg(path):
+    files = glob.glob(os.path.join(path, "*l1.png"))
+    files = [
+        [f.replace("_l1", "_l" + str(i)) for i in [1, 2, 3, 4, 5, 6, 7, 8, 9]]
+        for f in files
+    ]
+    filenames = [[fi.split("/")[-1] for fi in f] for f in files]
     print(path, len(files))
     return files, filenames
 
 
+def labels_to_image(path_list, mean_list=None, std_list=None):
+    file_list = [Image.open(f) for f in path_list]
+    all_labels = [np.asarray(f) / 255 for f in file_list]
+    if mean_list is not None:
+        assert len(all_labels) == len(
+            mean_list
+        ), "List of means should match number of channel images used."
+    else:
+        mean_list = [(0.1, 0.9)] * len(all_labels)
+    if std_list is not None:
+        assert len(all_labels) == len(
+            std_list
+        ), "List of stds should match number of channel images used."
+    else:
+        std_list = [(0.01, 0.1)] * len(all_labels)
+    if isinstance(mean_list[0], (list, tuple)):
+        mean_list = [np.random.uniform(m[0], m[1]) for m in mean_list]
+    if isinstance(std_list[0], (list, tuple)):
+        std_list = [np.random.uniform(s[0], s[1]) for s in std_list]
+    image = np.sum(
+        [lab * (torch.randn(lab.shape) * std + mean)]
+        for (lab, std, mean) in zip(all_labels, mean_list, std_list)
+    )
+    image -= image.min()
+    image /= image.max()
+    image *= 255
+    return Image.fromarray(np.uint8(image))
+
+
 def read_resize_image(image_file):
-    return (
-        Image.open(image_file)
-        .convert("RGB")
-        .resize(
-            (hparams.data.target_res, hparams.data.target_res), resample=Image.BILINEAR
-        )
+    return labels_to_image(image_file).resize(
+        (hparams.data.target_res, hparams.data.target_res), resample=Image.BILINEAR
     )
 
 
@@ -128,17 +158,23 @@ class generic_dataset(torch.utils.data.Dataset):
             return round(len(self.files) * hparams.synthesis.div_stats_subset_ratio)
 
 
-def train_val_data_generic(
+def train_val_data_synthseg(
     train_images, train_filenames, val_images, val_filenames, world_size, rank
 ):
     train_data = generic_dataset(train_images, train_filenames, mode="train")
-    train_sampler = DistributedSampler(
-        train_data, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
+    train_sampler = (
+        DistributedSampler(
+            train_data, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
+        )
+        if hparams.run.local == 0
+        else None
     )
     train_loader = torch.utils.data.DataLoader(
         sampler=train_sampler,
         dataset=train_data,
-        batch_size=hparams.train.batch_size // hparams.run.num_gpus,
+        batch_size=hparams.train.batch_size
+        if hparams.run.num_gpus == 0
+        else hparams.train.batch_size // hparams.run.num_gpus,
         shuffle=False,
         pin_memory=True,
         num_workers=2,
@@ -147,13 +183,19 @@ def train_val_data_generic(
     )
 
     val_data = generic_dataset(val_images, val_filenames, mode="val")
-    val_sampler = DistributedSampler(
-        val_data, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
+    val_sampler = (
+        DistributedSampler(
+            val_data, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
+        )
+        if hparams.run.local == 0
+        else None
     )
     val_loader = torch.utils.data.DataLoader(
         sampler=val_sampler,
         dataset=val_data,
-        batch_size=hparams.val.batch_size // hparams.run.num_gpus,
+        batch_size=hparams.val.batch_size
+        if hparams.run.num_gpus == 0
+        else hparams.val.batch_size // hparams.run.num_gpus,
         shuffle=False,
         pin_memory=True,
         num_workers=2,
