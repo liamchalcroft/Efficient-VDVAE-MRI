@@ -56,8 +56,11 @@ else:
 assert_CUDA_and_hparams_gpus_are_equal()
 
 # set the device
-if hparams.run.local == 1 and hparams.run.num_gpus == 0:
-    device = torch.device("cpu" if hparams.run.num_mps == 0 else "mps")
+if hparams.run.local == 1:
+    if hparams.run.num_gpus == 0:
+        device = torch.device("cpu" if hparams.run.num_mps == 0 else "mps")
+    else:
+        device = torch.device("cuda")
 
 
 if hparams.run.local == 0:
