@@ -410,7 +410,7 @@ def _compiled_amp_train_step(model, inputs, step_n, scaler, optimizer):
 
     scaler.scale(total_generator_loss).backward()
 
-    # scaler.unscale_(optimizer)
+    scaler.unscale_(optimizer)
 
     total_norm = gradient_clip(model)
     skip, gradient_skip_counter_delta = gradient_skip(total_norm)
