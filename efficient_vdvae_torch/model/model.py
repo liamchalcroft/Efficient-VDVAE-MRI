@@ -388,7 +388,7 @@ def _compiled_train_step(model, inputs, step_n):
 
 
 def _compiled_amp_train_step(model, inputs, step_n, scaler, optimizer):
-    with torch.autocast():
+    with torch.autocast(inputs.device):
         predictions, posterior_dist_list, prior_kl_dist_list = model(inputs)
         (
             avg_feature_matching_loss,
