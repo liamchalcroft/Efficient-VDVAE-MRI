@@ -387,20 +387,79 @@ def _compiled_train_step(model, inputs, step_n):
     )
 
 
-def train_step(model, ema_model, optimizer, inputs, step_n):
-    (
+def _compiled_amp_train_step(model, inputs, step_n, scaler, optimizer):
+    with torch.autocast():
+        predictions, posterior_dist_list, prior_kl_dist_list = model(inputs)
+        (
+            avg_feature_matching_loss,
+            avg_global_varprior_losses,
+            total_generator_loss,
+            means,
+            log_scales,
+            kl_div,
+        ) = compute_loss(
+            inputs,
+            predictions,
+            posterior_dist_list=posterior_dist_list,
+            prior_kl_dist_list=prior_kl_dist_list,
+            step_n=step_n,
+            global_batch_size=hparams.train.batch_size
+            if hparams.run.local == 1
+            else hparams.train.batch_size // hparams.run.num_gpus,
+        )
+
+    scaler.scale(total_generator_loss).backward()
+
+    scaler.unscale_(optimizer)
+
+    total_norm = gradient_clip(model)
+    skip, gradient_skip_counter_delta = gradient_skip(total_norm)
+
+    with torch.autocast():
+        # outputs = model.module.top_down.sample(predictions)
+        outputs = model.top_down.sample(predictions)
+
+    return (
         outputs,
         avg_feature_matching_loss,
         avg_global_varprior_losses,
         kl_div,
-        global_norm,
+        total_norm,
         gradient_skip_counter_delta,
         skip,
-    ) = _compiled_train_step(model, inputs, step_n)
+    )
 
-    if not skip:
-        optimizer.step()
-        update_ema(model, ema_model, hparams.train.ema_decay)
+
+def train_step(model, ema_model, optimizer, inputs, step_n, scaler=None):
+    if scaler:
+        (
+            outputs,
+            avg_feature_matching_loss,
+            avg_global_varprior_losses,
+            kl_div,
+            global_norm,
+            gradient_skip_counter_delta,
+            skip,
+        ) = _compiled_amp_train_step(model, inputs, step_n, scaler, optimizer)
+
+        if not skip:
+            scaler.step(optimizer)
+            scaler.update()
+            update_ema(model, ema_model, hparams.train.ema_decay)
+    else:
+        (
+            outputs,
+            avg_feature_matching_loss,
+            avg_global_varprior_losses,
+            kl_div,
+            global_norm,
+            gradient_skip_counter_delta,
+            skip,
+        ) = _compiled_train_step(model, inputs, step_n)
+
+        if not skip:
+            optimizer.step()
+            update_ema(model, ema_model, hparams.train.ema_decay)
 
     optimizer.zero_grad()
     return (
@@ -532,6 +591,7 @@ def train(
     checkpoint_path,
     device,
     rank,
+    scaler=None,
 ):
     ssim_metric = StructureSimilarityIndexMap(image_channels=hparams.data.channels)
     global_step = checkpoint_start
@@ -565,7 +625,9 @@ def train(
                 train_kl_div,
                 global_norm,
                 gradient_skip_counter_delta,
-            ) = train_step(model, ema_model, optimizer, train_inputs, global_step)
+            ) = train_step(
+                model, ema_model, optimizer, train_inputs, global_step, scaler
+            )
             # torch.cuda.synchronize()
             end_time = round((time.time() - start_time), 2)
             schedule.step()

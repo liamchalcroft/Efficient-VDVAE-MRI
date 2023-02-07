@@ -141,6 +141,8 @@ def main():
         checkpoint=checkpoint,
     )
 
+    scaler = torch.cuda.amp.GradScaler() if hparams.run.amp else None
+
     if checkpoint["model_state_dict"] is not None:
         if hparams.train.resume_from_ema:
             print("Resuming from EMA model")
@@ -236,6 +238,7 @@ def main():
         checkpoint_path,
         device,
         local_rank,
+        scaler,
     )
     if hparams.run.local == 0:
         cleanup()
