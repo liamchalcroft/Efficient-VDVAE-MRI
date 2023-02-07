@@ -388,7 +388,9 @@ def _compiled_train_step(model, inputs, step_n):
 
 
 def _compiled_amp_train_step(model, inputs, step_n, scaler, optimizer):
-    with torch.autocast("cuda" if "cuda" in str(inputs.device) else str(inputs.device)):
+    with torch.autocast(
+        device_type="cuda" if "cuda" in str(inputs.device) else str(inputs.device)
+    ):
         predictions, posterior_dist_list, prior_kl_dist_list = model(inputs)
         (
             avg_feature_matching_loss,
