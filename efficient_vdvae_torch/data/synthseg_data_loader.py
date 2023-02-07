@@ -55,7 +55,7 @@ train_transform = transforms.Compose(
         Normalize(),
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip(),
-        transforms.RandomAffine(30, (10, 10), (0.9, 1.1), 0.5),
+        transforms.RandomAffine(30, (0.1, 0.1), (0.9, 1.1), 0.5),
         MinMax(),
     ]
 )
