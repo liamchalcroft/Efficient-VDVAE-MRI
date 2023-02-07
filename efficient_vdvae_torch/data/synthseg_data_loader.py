@@ -7,6 +7,7 @@ from hparams import HParams
 from PIL import Image
 from torch.utils.data.distributed import DistributedSampler
 import glob
+from random import randrange
 
 hparams = HParams.get_hparams_by_name("efficient_vdvae")
 
@@ -49,21 +50,16 @@ class MinMax(object):
         return self.__class__.__name__ + "()"
 
 
-if hparams.data.random_horizontal_flip:
-    train_transform = transforms.Compose(
-        [
-            Normalize(),
-            transforms.RandomHorizontalFlip(),
-            MinMax(),
-        ]
-    )
-else:
-    train_transform = transforms.Compose(
-        [
-            Normalize(),
-            MinMax(),
-        ]
-    )
+train_transform = transforms.Compose(
+    [
+        Normalize(),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomVerticalFlip(),
+        transforms.RandomAffine(30, (10, 10), (0.9, 1.1), 0.5),
+        MinMax(),
+    ]
+)
+
 
 valid_transform = transforms.Compose(
     [
@@ -119,6 +115,16 @@ def read_resize_image(image_file):
     )
 
 
+def read_crop_image(image_file):
+    img = labels_to_image(image_file)
+    x, y = img.size
+    x1 = randrange(0, x - hparams.data.target_resp)
+    y1 = randrange(0, y - hparams.data.target_res)
+    return img.crop(
+        (x1, y1, x1 + hparams.data.target_res, y1 + hparams.data.target_res)
+    )
+
+
 class generic_dataset(torch.utils.data.Dataset):
     def __init__(self, files, filenames, mode):
 
@@ -131,18 +137,18 @@ class generic_dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         if self.mode == "train":
-            img = read_resize_image(self.files[idx])
+            img = read_crop_image(self.files[idx])
             img = train_transform(img)
             return img
 
         elif self.mode in ["val", "div_stats", "test"]:
-            img = read_resize_image(self.files[idx])
+            img = read_crop_image(self.files[idx])
             img = valid_transform(img)
             return img
 
         elif self.mode == "encode":
             filename = self.filenames[idx]
-            img = read_resize_image(self.files[idx])
+            img = read_crop_image(self.files[idx])
             img = valid_transform(img)
             return img, filename
 
