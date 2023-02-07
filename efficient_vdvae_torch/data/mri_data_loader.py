@@ -86,7 +86,7 @@ def read_resize_image(image_file):
 def read_crop_image(image_file):
     img = Image.open(image_file)
     x, y = img.size
-    x1 = randrange(0, x - hparams.data.target_resp)
+    x1 = randrange(0, x - hparams.data.target_res)
     y1 = randrange(0, y - hparams.data.target_res)
     return img.crop(
         (x1, y1, x1 + hparams.data.target_res, y1 + hparams.data.target_res)
