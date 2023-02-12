@@ -99,6 +99,7 @@ def labels_to_image(path_list, mean_list=None, std_list=None):
         mean_list = [np.random.uniform(m[0], m[1]) for m in mean_list]
     if isinstance(std_list[0], (list, tuple)):
         std_list = [np.random.uniform(s[0], s[1]) for s in std_list]
+    print(all_labels[0].shape)
     image = np.sum(
         [
             lab * (np.random.randn(*lab.shape) * std + mean)
