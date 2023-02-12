@@ -105,9 +105,9 @@ def labels_to_image(path_list, mean_list=None, std_list=None):
             for (lab, std, mean) in zip(all_labels, mean_list, std_list)
         ]
     )
-    image -= float(image.min())
-    image /= float(image.max())
-    image *= 255
+    image = image / float(image.min())
+    image = image / float(image.max())
+    image = image * 255
     return Image.fromarray(np.uint8(image))
 
 
