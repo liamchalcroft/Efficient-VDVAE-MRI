@@ -100,12 +100,14 @@ def labels_to_image(path_list, mean_list=None, std_list=None):
     if isinstance(std_list[0], (list, tuple)):
         std_list = [np.random.uniform(s[0], s[1]) for s in std_list]
     print(all_labels[0].shape)
-    image = np.sum(
+    image = np.stack(
         [
             lab * (np.random.randn(*lab.shape) * std + mean)
             for (lab, std, mean) in zip(all_labels, mean_list, std_list)
         ]
     )
+    print(image.shape)
+    image = np.sum(image, axis=0)
     print(image.shape)
     image = image / float(image.min())
     image = image / float(image.max())
