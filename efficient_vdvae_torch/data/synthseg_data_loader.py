@@ -81,6 +81,7 @@ def create_filenames_list_synthseg(path):
 
 
 def labels_to_image(path_list, mean_list=None, std_list=None):
+    print(path_list)
     file_list = [Image.open(f) for f in path_list]
     all_labels = [np.asarray(f) / 255 for f in file_list]
     if mean_list is not None:
@@ -99,16 +100,13 @@ def labels_to_image(path_list, mean_list=None, std_list=None):
         mean_list = [np.random.uniform(m[0], m[1]) for m in mean_list]
     if isinstance(std_list[0], (list, tuple)):
         std_list = [np.random.uniform(s[0], s[1]) for s in std_list]
-    print(all_labels[0].shape)
     image = np.stack(
         [
             lab * (np.random.randn(*lab.shape) * std + mean)
             for (lab, std, mean) in zip(all_labels, mean_list, std_list)
         ]
     )
-    print(image.shape)
     image = np.sum(image, axis=0)
-    print(image.shape)
     image = image / float(image.min())
     image = image / float(image.max())
     image = image * 255
