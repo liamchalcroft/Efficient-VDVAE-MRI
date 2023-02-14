@@ -106,7 +106,7 @@ def labels_to_image(path_list, mean_list=None, std_list=None):
         ]
     )
     image = np.sum(image, axis=0)
-    print(image.shape, image.min(), image.mean(), image.max())
+    # print(image.shape, image.min(), image.mean(), image.max())
     image = image - float(image.min())
     image = image / float(image.max())
     image = image * 255
