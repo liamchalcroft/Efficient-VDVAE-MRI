@@ -208,7 +208,10 @@ def main():
         train_files, train_filenames = create_filenames_list_synthseg(
             hparams.data.train_data_path
         )
-        val_files, val_filenames = create_filenames_list_ixi(hparams.data.val_data_path)
+        # val_files, val_filenames = create_filenames_list_ixi(hparams.data.val_data_path)
+        val_files, val_filenames = create_filenames_list_synthseg(
+            hparams.data.val_data_path
+        )
         train_loader, val_loader = train_val_data_synthseg(
             train_files,
             train_filenames,

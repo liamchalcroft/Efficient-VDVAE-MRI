@@ -81,7 +81,6 @@ def create_filenames_list_synthseg(path):
 
 
 def labels_to_image(path_list, mean_list=None, std_list=None):
-    print(path_list)
     file_list = [Image.open(f) for f in path_list]
     all_labels = [np.asarray(f) / 255 for f in file_list]
     if mean_list is not None:
