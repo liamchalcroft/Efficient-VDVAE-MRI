@@ -102,7 +102,7 @@ def labels_to_image(path_list, mean_list=None, std_list=None):
     image = np.stack(
         [
             lab * (np.random.randn(*lab.shape) * std + mean)
-            for (lab, std, mean) in zip(all_labels, mean_list, std_list)
+            for (lab, mean, std) in zip(all_labels, mean_list, std_list)
         ]
     )
     image = np.sum(image, axis=0)
