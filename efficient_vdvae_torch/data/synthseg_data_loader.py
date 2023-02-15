@@ -70,11 +70,20 @@ valid_transform = transforms.Compose(
 
 
 def create_filenames_list_synthseg(path):
-    files = glob.glob(os.path.join(path, "*l9.png"))
-    files = [
-        [f.replace("_l9", "_l" + str(i)) for i in [1, 2, 3, 4, 5, 6, 7, 8, 9]]
-        for f in files
-    ]
+    fileglob = glob.glob(os.path.join(path, "*l1.png"))
+    # files = [
+    #     [f.replace("_l9", "_l" + str(i)) for i in [1, 2, 3, 4, 5, 6, 7, 8, 9]]
+    #     for f in files
+    # ]
+    files = []
+    for f in fileglob:
+        flist = []
+        for i in [1, 2, 3, 4, 5, 6, 7, 8, 9]:
+            fi = f.replace("_l1", "_l" + str(i))
+            if os.path.isfile(fi):
+                flist.append(fi)
+        if len(flist) == 9:
+            files.append(flist)
     filenames = [[fi.split("/")[-1] for fi in f] for f in files]
     print(path, len(files))
     return files, filenames
