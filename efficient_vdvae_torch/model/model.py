@@ -792,59 +792,68 @@ def train(
                         f"SSIM: {val_ssim:.6f}"
                     )
 
-                    # Save checkpoint (only if better than best)
-                    print(f"Saving checkpoint for global_step {global_step}..")
+                    if val_ssim < 1e6:
+                        # Save checkpoint (only if not NaN SSIM val)
+                        print(f"Saving checkpoint for global_step {global_step}..")
 
-                    torch.save(
-                        {
-                            "global_step": global_step,
-                            # "model_state_dict": model.module.state_dict(),
-                            "model_state_dict": model.state_dict(),
-                            "ema_model_state_dict": ema_model.state_dict(),
-                            "optimizer_state_dict": optimizer.state_dict(),
-                            "scheduler_state_dict": schedule.state_dict(),
-                        },
-                        checkpoint_path,
-                    )
+                        torch.save(
+                            {
+                                "global_step": global_step,
+                                # "model_state_dict": model.module.state_dict(),
+                                "model_state_dict": model.state_dict(),
+                                "ema_model_state_dict": ema_model.state_dict(),
+                                "optimizer_state_dict": optimizer.state_dict(),
+                                "scheduler_state_dict": schedule.state_dict(),
+                            },
+                            checkpoint_path,
+                        )
 
-                    # Tensorboard logging
-                    print("Logging to Tensorboard..")
-                    train_losses["skips_count"] = (
-                        gradient_skip_counter / hparams.train.total_train_steps
-                    )
-                    tensorboard_log(
-                        model,
-                        optimizer,
-                        global_step,
-                        tb_writer_train,
-                        train_losses,
-                        train_outputs,
-                        train_inputs,
-                        global_norm=global_norm,
-                    )
-                    tensorboard_log(
-                        model,
-                        optimizer,
-                        global_step,
-                        tb_writer_val,
-                        val_losses,
-                        val_outputs,
-                        val_inputs,
-                        means=val_means,
-                        log_scales=val_log_scales,
-                        mode="val",
-                    )
+                        # Tensorboard logging
+                        print("Logging to Tensorboard..")
+                        train_losses["skips_count"] = (
+                            gradient_skip_counter / hparams.train.total_train_steps
+                        )
+                        tensorboard_log(
+                            model,
+                            optimizer,
+                            global_step,
+                            tb_writer_train,
+                            train_losses,
+                            train_outputs,
+                            train_inputs,
+                            global_norm=global_norm,
+                        )
+                        tensorboard_log(
+                            model,
+                            optimizer,
+                            global_step,
+                            tb_writer_val,
+                            val_losses,
+                            val_outputs,
+                            val_inputs,
+                            means=val_means,
+                            log_scales=val_log_scales,
+                            mode="val",
+                        )
 
-                    # Save artifacts
-                    plot_image(
-                        train_outputs[0],
-                        train_inputs[0],
-                        global_step,
-                        writer=tb_writer_train,
-                    )
-                    plot_image(
-                        val_outputs[0], val_inputs[0], global_step, writer=tb_writer_val
-                    )
+                        # Save artifacts
+                        plot_image(
+                            train_outputs[0],
+                            train_inputs[0],
+                            global_step,
+                            writer=tb_writer_train,
+                        )
+                        plot_image(
+                            val_outputs[0],
+                            val_inputs[0],
+                            global_step,
+                            writer=tb_writer_val,
+                        )
+                    else:  # Crash if NaNs in model
+                        print(
+                            "NaNs found in metrics - please resume training from last stable checkpoint."
+                        )
+                        exit()
                 model.train()
             if hparams.run.local == 0:
                 dist.barrier()
