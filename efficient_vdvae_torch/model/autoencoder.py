@@ -263,22 +263,36 @@ class TopDown(torch.nn.Module):
             torch.log(u) - torch.log(1.0 - u)
         )  # B, C,  H, W
 
-        # Autoregressively predict RGB
-        x0 = torch.clamp(
-            x[:, 0:1, :, :], min=self.min_pix_value, max=self.max_pix_value
-        )  # B, 1, H, W
-        x1 = torch.clamp(
-            x[:, 1:2, :, :] + coeffs[:, 0:1, :, :] * x0,
-            min=self.min_pix_value,
-            max=self.max_pix_value,
-        )  # B, 1, H, W
-        x2 = torch.clamp(
-            x[:, 2:3, :, :] + coeffs[:, 1:2, :, :] * x0 + coeffs[:, 2:3, :, :] * x1,
-            min=self.min_pix_value,
-            max=self.max_pix_value,
-        )  # B, 1, H, W
+        # Autoregressively predict channels
+        C = x.size(1)
+        x_chans = []
+        for ci in range(C):
+            x_ = x[:, ci, :, :]
+            if ci == 1:
+                x_ += x_chans[0] * coeffs[:, 0, :, :]
+            elif ci > 1:
+                for cj in range(ci):
+                    x_ += x_chans[cj] * coeffs[:, cj + 1, :, :]
+            x_chans.append(
+                torch.clamp(x_, min=self.min_pix_value, max=self.max_pix_value)
+            )
+        x = torch.cat(x_chans, dim=1)  # B, C, H, W
 
-        x = torch.cat([x0, x1, x2], dim=1)  # B, C, H, W
+        # x0 = torch.clamp(
+        #     x[:, 0:1, :, :], min=self.min_pix_value, max=self.max_pix_value
+        # )  # B, 1, H, W
+        # x1 = torch.clamp(
+        #     x[:, 1:2, :, :] + coeffs[:, 0:1, :, :] * x0,
+        #     min=self.min_pix_value,
+        #     max=self.max_pix_value,
+        # )  # B, 1, H, W
+        # x2 = torch.clamp(
+        #     x[:, 2:3, :, :] + coeffs[:, 1:2, :, :] * x0 + coeffs[:, 2:3, :, :] * x1,
+        #     min=self.min_pix_value,
+        #     max=self.max_pix_value,
+        # )  # B, 1, H, W
+        # x = torch.cat([x0, x1, x2], dim=1)  # B, C, H, W
+
         return x
 
     def forward(self, skip_list, variate_masks):
